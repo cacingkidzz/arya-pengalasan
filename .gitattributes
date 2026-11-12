@@ -1,0 +1,21 @@
+# Normalisasi akhir baris: simpan LF di repo, checkout sesuai OS.
+* text=auto
+
+# Berkas biner — jangan diubah akhir barisnya.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.pdf binary
+*.zip binary
+
+# Berkas SQL & Markdown tetap teks biasa.
+*.sql text
+*.md text

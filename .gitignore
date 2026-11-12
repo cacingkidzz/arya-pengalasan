@@ -1,0 +1,65 @@
+# ============================================================================
+# .gitignore — KBAP (Arya Pengalasan Pusat)
+#
+# Repo ini PUBLIK. Yang dikecualikan di bawah adalah berkas yang berisi
+# kredensial, data pribadi warga, atau media besar hasil unggahan/generate.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Kredensial database (WAJIB tidak ikut)
+#    Salin dari admin/koneksi.contoh.php saat memasang di server baru.
+# ---------------------------------------------------------------------------
+admin/koneksi.php
+admin/koneksi.local.php
+admin/koneksi.rahasia.php
+*.local.php
+
+# ---------------------------------------------------------------------------
+# 2. Database
+#    - Dump berisi data asli warga (NIK, no HP, alamat, keuangan) -> JANGAN.
+#    - Struktur saja (database/kbap_struktur.sql) boleh ikut.
+#    - File migrasi di admin/migrasi/ boleh ikut.
+# ---------------------------------------------------------------------------
+database/hosting/
+*.sql
+!database/kbap_struktur.sql
+!admin/migrasi/*.sql
+
+# ---------------------------------------------------------------------------
+# 3. Media hasil unggahan / generate (ratusan MB, bisa dibuat ulang)
+# ---------------------------------------------------------------------------
+admin/uploads/*
+!admin/uploads/.gitkeep
+!admin/uploads/.htaccess
+!admin/uploads/nota
+admin/uploads/nota/*
+!admin/uploads/nota/.gitkeep
+
+admin/kartu_anggota/*
+!admin/kartu_anggota/.gitkeep
+
+admin/qr_codes/*
+!admin/qr_codes/.gitkeep
+
+# ---------------------------------------------------------------------------
+# 4. Log
+# ---------------------------------------------------------------------------
+error_log
+**/error_log
+*.log
+
+# ---------------------------------------------------------------------------
+# 5. Catatan internal proyek (memuat nama warga & kredensial)
+# ---------------------------------------------------------------------------
+AGENTS.md
+
+# ---------------------------------------------------------------------------
+# 6. Berkas OS / editor
+# ---------------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
