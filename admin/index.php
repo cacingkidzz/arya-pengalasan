@@ -208,6 +208,22 @@ date_default_timezone_set('Asia/Makassar');
                 transform: rotate(360deg);
             }
         }
+
+        /*
+         * Perbaikan modal "scrollable" yang memakai pola <form> membungkus
+         * .modal-header / .modal-body / .modal-footer (mis. modal Tambah & Edit
+         * pada Usulan Semeton Baru). Bootstrap mengharapkan .modal-body sebagai
+         * anak langsung .modal-content; kalau ada <form> di antaranya, form
+         * menjadi flex item biasa sehingga .modal-body tidak bisa mengecil dan
+         * isinya terpotong (tidak bisa digulir). Aturan ini membuat form menjadi
+         * kolom flex penuh sehingga .modal-body kembali bisa digulir.
+         */
+        .modal-dialog-scrollable .modal-content > form {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
     </style>
 </head>
 
