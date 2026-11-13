@@ -1,0 +1,106 @@
+# ============================================================================
+# .htaccess untuk public_html — KBAP (Arya Pengalasan Pusat)
+#
+# CARA PAKAI
+#   1. Salin file ini ke `public_html/.htaccess` (ganti nama menjadi .htaccess).
+#      Skrip `deploy/buat-paket.ps1` sudah menyalinnya otomatis ke dalam paket.
+#   2. Bila hosting Anda menolak `Options -Indexes` (muncul HTTP 500),
+#      hapus/komentari baris tersebut — lihat `deploy/README.md` bagian
+#      "Pemecahan masalah".
+#
+# CATATAN
+#   - File ini hanya untuk Apache. Nginx tidak membaca .htaccess; aturan
+#     keamanannya harus dipindahkan ke konfigurasi server.
+#   - Redirect HTTPS sengaja dinonaktifkan agar situs tidak mati saat
+#     sertifikat SSL belum aktif.
+# ============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Direktori & berkas default
+# ---------------------------------------------------------------------------
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+DirectoryIndex index.php index.html
+
+AddDefaultCharset UTF-8
+
+# ---------------------------------------------------------------------------
+# 2. Tolak akses ke berkas sensitif
+#    - titik di awal nama (.env, .git, .htaccess, ...)
+#    - dump/backup (.sql, .bak, .old, .zip, .tar, .gz)
+#    - log (error_log, *.log)
+#    - dokumentasi internal (README.md, AGENTS.md)
+#    - kredensial koneksi (admin/koneksi*.php) — tidak boleh dibuka langsung
+# ---------------------------------------------------------------------------
+<FilesMatch "(^\.|\.(sql|bak|old|orig|swp|log|zip|tar|gz|ini|md)$|^error_log$|^koneksi.*\.php$)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------------------
+# 3. Folder yang tidak boleh diakses lewat web
+#    (idealnya folder ini memang tidak diunggah ke public_html)
+# ---------------------------------------------------------------------------
+<IfModule mod_alias.c>
+    RedirectMatch 404 ^/(?:database|arsip|deploy|migrasi)(?:/|$)
+    RedirectMatch 404 /\.git(?:/|$)
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 4. Berkas yang bisa dieksekusi di folder media -> diblokir
+#    (jaring pengaman tambahan; admin/uploads/.htaccess sudah menanganinya)
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^admin/(?:uploads|kartu_anggota|qr_codes)/.*\.(?:php|phtml|phar|php[0-9]|pl|py|cgi|sh|bat|exe)$ - [F,L,NC]
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 5. Header keamanan
+#    camera=(self) WAJIB diizinkan karena halaman pembayaran memakai
+#    pemindai QR (kamera) di browser.
+# ---------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(self)"
+    Header always unset X-Powered-By
+    Header unset Server
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 6. Cache aset statis (CSS/JS/gambar) — 7 hari
+# ---------------------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType image/png "access plus 7 days"
+    ExpiresByType image/jpeg "access plus 7 days"
+    ExpiresByType image/svg+xml "access plus 7 days"
+    ExpiresByType font/ttf "access plus 30 days"
+    ExpiresByType font/woff2 "access plus 30 days"
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 7. Redirect ke HTTPS (AKTIFKAN hanya setelah SSL terpasang & aktif)
+# ---------------------------------------------------------------------------
+# <IfModule mod_rewrite.c>
+#     RewriteEngine On
+#     RewriteCond %{HTTPS} !=on
+#     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+# </IfModule>
+
+# ---------------------------------------------------------------------------
+# 8. Pesan galat sederhana (hindari membocorkan path server)
+# ---------------------------------------------------------------------------
+ErrorDocument 403 "Akses ditolak."
+ErrorDocument 404 "Halaman tidak ditemukan."

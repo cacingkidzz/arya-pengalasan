@@ -63,3 +63,11 @@ desktop.ini
 .vscode/
 *.swp
 *~
+
+# ---------------------------------------------------------------------------
+# 7. Hasil paket deploy (berisi kredensial -> JANGAN ikut)
+#    Sumber template tetap ikut: deploy/*.htaccess, deploy/*.php, deploy/*.ps1
+# ---------------------------------------------------------------------------
+deploy/out/
+deploy/*.zip
+!deploy/public_html.htaccess

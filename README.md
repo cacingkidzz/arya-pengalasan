@@ -114,6 +114,12 @@ semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2) sudah ada di
 ├── database/
 │   ├── kbap_struktur.sql      # struktur 15 tabel (boleh dipublikasikan)
 │   └── hosting/               # dump data asli (TIDAK ikut repo)
+├── deploy/                    # kit unggah ke public_html (bukan bagian aplikasi)
+│   ├── buat-paket.ps1         # pembuat ZIP siap unggah
+│   ├── public_html.htaccess   # template .htaccess root
+│   ├── koneksi.public_html.php# template admin/koneksi.php
+│   ├── cek-server.php         # diagnosa sekali pakai (hapus setelah dipakai)
+│   └── README.md              # panduan deploy lengkap
 ├── arsip/                     # berkas lama yang tidak dipakai
 └── .gitignore
 ```
@@ -143,6 +149,18 @@ semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2) sudah ada di
 ---
 
 ## Pemasangan di Hosting
+
+> **Cara cepat:** folder **`deploy/`** berisi kit siap pakai — skrip pembuat ZIP
+> (`deploy/buat-paket.ps1`), template `.htaccess`, template `admin/koneksi.php`,
+> alat cek server, dan panduan langkah demi langkah di **`deploy/README.md`**.
+> Jalankan dari root proyek:
+>
+> ```powershell
+> .\deploy\buat-paket.ps1 -DbUser "namauser_dbuser" -DbPass "password_db" -DbName "namauser_kbap"
+> ```
+>
+> Hasilnya `deploy\out\kbap-public_html-*.zip` — unggah ke `public_html`, extract,
+> hapus ZIP. Langkah di bawah adalah versi manual bila tidak memakai skrip.
 
 1. **Unggah kode** (tanpa `database/hosting/`, tanpa `admin/koneksi.php`,
    tanpa `admin/uploads/*`, `kartu_anggota/*`, `qr_codes/*`) ke `public_html`
