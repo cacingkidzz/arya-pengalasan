@@ -4,7 +4,8 @@
  *
  * Hanya membaca data (SELECT). Tidak ada operasi tulis ke database.
  * Angka utama: semeton, odalan terakhir, kas hari ini, keuangan per odalan,
- * tren 12 bulan, pembayaran terbaru, dan tunggakan per wilayah.
+ * pembayaran ngarep vs ngempi, tren 12 bulan, pembayaran terbaru, dan
+ * tunggakan per wilayah.
  */
 require_once __DIR__ . '/../security.php';
 kbap_guard_menu('home'); // wajib login + hak akses menu
@@ -51,7 +52,14 @@ if (!function_exists('kbap_home_angka')) {
 if (!function_exists('kbap_home_persen_teks')) {
     function kbap_home_persen_teks($bagian, $total): string
     {
-        return str_replace('.', ',', (string) kbap_home_persen($bagian, $total));
+        return number_format(kbap_home_persen($bagian, $total), 1, ',', '.');
+    }
+}
+
+if (!function_exists('kbap_home_pct')) {
+    function kbap_home_pct($nilai): string
+    {
+        return number_format((float) $nilai, 1, ',', '.');
     }
 }
 
@@ -323,6 +331,88 @@ if ($res = $koneksi->query($sql_keuangan)) {
 }
 
 $persen_total = kbap_home_persen($total_keuangan['bayar'], $total_keuangan['tagihan']);
+
+/* ------------------------------------------------------------------ */
+/* 4b. Pembayaran per jenis semeton (ngarep vs ngempi) per odalan      */
+/*     Pembayaran yang dibatalkan tidak dihitung.                      */
+/* ------------------------------------------------------------------ */
+$jenis_bayar = [];
+$jenis_total = [
+    'ngarep_bayar'   => 0.0, 'ngarep_trx'   => 0, 'ngarep_tagihan'   => 0.0,
+    'ngempi_bayar'   => 0.0, 'ngempi_trx'   => 0, 'ngempi_tagihan'   => 0.0,
+    'lain_bayar'     => 0.0, 'lain_trx'     => 0, 'lain_tagihan'     => 0.0,
+];
+
+foreach ($keuangan as $k) {
+    $jenis_bayar[(int) $k['id']] = [
+        'ngarep_bayar'   => 0.0, 'ngarep_trx'   => 0, 'ngarep_tagihan'   => 0.0,
+        'ngempi_bayar'   => 0.0, 'ngempi_trx'   => 0, 'ngempi_tagihan'   => 0.0,
+        'lain_bayar'     => 0.0, 'lain_trx'     => 0, 'lain_tagihan'     => 0.0,
+    ];
+}
+
+/* Realisasi pembayaran, dikelompokkan menurut jenis_user semeton pembayar. */
+if ($res = $koneksi->query(
+    "SELECT o.id,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngarep' THEN p.jumlah_bayar ELSE 0 END), 0) AS ngarep_bayar,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngarep' THEN 1 ELSE 0 END), 0)               AS ngarep_trx,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngempi' THEN p.jumlah_bayar ELSE 0 END), 0) AS ngempi_bayar,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngempi' THEN 1 ELSE 0 END), 0)               AS ngempi_trx,
+            COALESCE(SUM(CASE WHEN s.jenis_user IS NULL OR s.jenis_user NOT IN ('ngarep','ngempi')
+                              THEN p.jumlah_bayar ELSE 0 END), 0)                              AS lain_bayar,
+            COALESCE(SUM(CASE WHEN s.jenis_user IS NULL OR s.jenis_user NOT IN ('ngarep','ngempi')
+                              THEN 1 ELSE 0 END), 0)                                           AS lain_trx
+     FROM odalan o
+     LEFT JOIN pembayaran p ON p.id_piodalan = o.id AND p.dibatalkan_at IS NULL
+     LEFT JOIN semeton s ON s.id = p.id_semeton
+     GROUP BY o.id"
+)) {
+    while ($r = $res->fetch_assoc()) {
+        $id_o = (int) $r['id'];
+        if (!isset($jenis_bayar[$id_o])) {
+            continue;
+        }
+        $jenis_bayar[$id_o]['ngarep_bayar'] = (float) $r['ngarep_bayar'];
+        $jenis_bayar[$id_o]['ngarep_trx']   = (int) $r['ngarep_trx'];
+        $jenis_bayar[$id_o]['ngempi_bayar'] = (float) $r['ngempi_bayar'];
+        $jenis_bayar[$id_o]['ngempi_trx']   = (int) $r['ngempi_trx'];
+        $jenis_bayar[$id_o]['lain_bayar']   = (float) $r['lain_bayar'];
+        $jenis_bayar[$id_o]['lain_trx']     = (int) $r['lain_trx'];
+    }
+    $res->free();
+}
+
+/* Tagihan (nominal asli) per jenis, untuk menghitung capaian tiap jenis. */
+if ($res = $koneksi->query(
+    "SELECT h.id_odalan,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngarep' THEN h.jumlah_tagihan_asli ELSE 0 END), 0) AS ngarep_tagihan,
+            COALESCE(SUM(CASE WHEN s.jenis_user = 'ngempi' THEN h.jumlah_tagihan_asli ELSE 0 END), 0) AS ngempi_tagihan,
+            COALESCE(SUM(CASE WHEN s.jenis_user IS NULL OR s.jenis_user NOT IN ('ngarep','ngempi')
+                              THEN h.jumlah_tagihan_asli ELSE 0 END), 0)                                AS lain_tagihan
+     FROM hutang h
+     JOIN semeton s ON s.id = h.id_semeton
+     GROUP BY h.id_odalan"
+)) {
+    while ($r = $res->fetch_assoc()) {
+        $id_o = (int) $r['id_odalan'];
+        if (!isset($jenis_bayar[$id_o])) {
+            continue;
+        }
+        $jenis_bayar[$id_o]['ngarep_tagihan'] = (float) $r['ngarep_tagihan'];
+        $jenis_bayar[$id_o]['ngempi_tagihan'] = (float) $r['ngempi_tagihan'];
+        $jenis_bayar[$id_o]['lain_tagihan']   = (float) $r['lain_tagihan'];
+    }
+    $res->free();
+}
+
+foreach ($jenis_bayar as $j) {
+    foreach ($jenis_total as $kunci => $nilai) {
+        $jenis_total[$kunci] += $j[$kunci];
+    }
+}
+
+$jenis_grand_total = $jenis_total['ngarep_bayar'] + $jenis_total['ngempi_bayar'] + $jenis_total['lain_bayar'];
+$ada_jenis_lain   = ($jenis_total['lain_bayar'] > 0 || $jenis_total['lain_tagihan'] > 0);
 
 /* ------------------------------------------------------------------ */
 /* 5. Tren 12 bulan terakhir (urunan + punia)                          */
@@ -632,7 +722,7 @@ $jam_data = date('d M Y H:i');
 
                                 <div class="d-flex justify-content-between align-items-center small mt-4 mb-1">
                                     <span class="text-muted">Capaian urunan</span>
-                                    <span class="fw-bold"><?= str_replace('.', ',', (string) $persen_odalan) ?>%</span>
+                                    <span class="fw-bold"><?= kbap_home_pct($persen_odalan) ?>%</span>
                                 </div>
                                 <div class="progress mb-4" style="height: 10px;" role="progressbar"
                                      aria-label="Capaian urunan odalan terakhir"
@@ -761,7 +851,7 @@ $jam_data = date('d M Y H:i');
                             </h5>
                             <div class="d-flex align-items-center gap-2">
                                 <span class="badge bg-success" title="Urunan terbayar dibanding total tagihan">
-                                    Terkumpul <?= str_replace('.', ',', (string) $persen_total) ?>%
+                                    Terkumpul <?= kbap_home_pct($persen_total) ?>%
                                 </span>
                                 <?php if ($boleh_menu('laporan_laba_rugi')) : ?>
                                     <a href="index.php?menu=laporan_laba_rugi" class="btn btn-sm btn-outline-secondary">
@@ -800,7 +890,7 @@ $jam_data = date('d M Y H:i');
                                                             <?= kbap_home_e(date('d M Y', strtotime($k['tanggal']))) ?>
                                                         </div>
                                                         <div class="progress mt-1" style="height: 5px; width: 90px;"
-                                                             title="Capaian urunan <?= str_replace('.', ',', (string) $k['persen']) ?>%">
+                                                             title="Capaian urunan <?= kbap_home_pct($k['persen']) ?>%">
                                                             <div class="progress-bar bg-success" style="width: <?= $k['persen'] ?>%"></div>
                                                         </div>
                                                     </td>
@@ -808,7 +898,7 @@ $jam_data = date('d M Y H:i');
                                                     <td class="text-end text-success">
                                                         <?= kbap_home_rp($k['bayar']) ?>
                                                         <div class="text-muted" style="font-size: .7rem;">
-                                                            <?= str_replace('.', ',', (string) $k['persen']) ?>% · <?= kbap_home_angka($k['trx']) ?> trx
+                                                            <?= kbap_home_pct($k['persen']) ?>% · <?= kbap_home_angka($k['trx']) ?> trx
                                                         </div>
                                                     </td>
                                                     <td class="text-end <?= $k['sisa'] > 0 ? 'text-danger fw-bold' : 'text-muted' ?>">
@@ -875,6 +965,121 @@ $jam_data = date('d M Y H:i');
                             <div class="text-muted small mt-2 text-center">
                                 Puncak bulan: <strong><?= kbap_home_rp($maks_tren) ?></strong>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= PEMBAYARAN NGAREP VS NGEMPI ================= -->
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm mb-0">
+                        <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <h5 class="card-title fw-bold mb-0">
+                                <i class="bi bi-people-fill me-2 text-info"></i>Pembayaran per Jenis Semeton
+                            </h5>
+                            <div class="d-flex flex-wrap gap-1">
+                                <span class="badge bg-info text-dark" title="Total pembayaran dari anggota ngarep">
+                                    Ngarep <?= kbap_home_rp($jenis_total['ngarep_bayar']) ?>
+                                </span>
+                                <span class="badge bg-secondary" title="Total keseluruhan pembayaran dari anggota ngempi">
+                                    Ngempi <?= kbap_home_rp($jenis_total['ngempi_bayar']) ?>
+                                </span>
+                                <span class="badge bg-light text-dark border">
+                                    Total <?= kbap_home_rp($jenis_grand_total) ?>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light text-uppercase small">
+                                        <tr>
+                                            <th class="ps-3">Odalan</th>
+                                            <th class="text-end">Terbayar Ngarep</th>
+                                            <th class="text-end">Terbayar Ngempi</th>
+                                            <th class="text-end">Total Terbayar</th>
+                                            <th class="text-end pe-3" style="min-width: 150px;">Porsi Ngarep</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (!$keuangan) : ?>
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-4">
+                                                    Belum ada data odalan.
+                                                </td>
+                                            </tr>
+                                        <?php else : ?>
+                                            <?php foreach ($keuangan as $k) :
+                                                $j = $jenis_bayar[(int) $k['id']] ?? [];
+                                                $j_ngarep   = (float) ($j['ngarep_bayar'] ?? 0);
+                                                $j_ngempi   = (float) ($j['ngempi_bayar'] ?? 0);
+                                                $j_lain     = (float) ($j['lain_bayar'] ?? 0);
+                                                $j_total    = $j_ngarep + $j_ngempi + $j_lain;
+                                                $j_pct_ngarep = kbap_home_persen($j_ngarep, (float) ($j['ngarep_tagihan'] ?? 0));
+                                                $j_pct_ngempi = kbap_home_persen($j_ngempi, (float) ($j['ngempi_tagihan'] ?? 0));
+                                                $j_porsi_ngarep = kbap_home_persen($j_ngarep, $j_total);
+                                                ?>
+                                                <tr>
+                                                    <td class="ps-3">
+                                                        <div class="fw-bold"><?= kbap_home_e($k['nama_odalan']) ?></div>
+                                                        <div class="text-muted" style="font-size: .72rem;">
+                                                            <?= kbap_home_e(date('d M Y', strtotime($k['tanggal']))) ?>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <div class="fw-bold text-success"><?= kbap_home_rp($j_ngarep) ?></div>
+                                                        <div class="text-muted" style="font-size: .7rem;">
+                                                            <?= kbap_home_pct($j_pct_ngarep) ?>%
+                                                            dari <?= kbap_home_rp($j['ngarep_tagihan'] ?? 0) ?>
+                                                            · <?= kbap_home_angka($j['ngarep_trx'] ?? 0) ?> trx
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end">
+                                                        <div class="fw-bold text-secondary"><?= kbap_home_rp($j_ngempi) ?></div>
+                                                        <div class="text-muted" style="font-size: .7rem;">
+                                                            <?= kbap_home_pct($j_pct_ngempi) ?>%
+                                                            dari <?= kbap_home_rp($j['ngempi_tagihan'] ?? 0) ?>
+                                                            · <?= kbap_home_angka($j['ngempi_trx'] ?? 0) ?> trx
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-end fw-bold"><?= kbap_home_rp($j_total) ?></td>
+                                                    <td class="text-end pe-3">
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <div class="progress flex-grow-1" style="height: 7px;">
+                                                                <div class="progress-bar bg-info" style="width: <?= $j_porsi_ngarep ?>%"></div>
+                                                            </div>
+                                                            <span class="text-muted small text-nowrap">
+                                                                <?= kbap_home_pct($j_porsi_ngarep) ?>%
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                    <?php if ($keuangan) : ?>
+                                        <tfoot class="table-light fw-bold">
+                                            <tr>
+                                                <td class="ps-3">TOTAL</td>
+                                                <td class="text-end text-success"><?= kbap_home_rp($jenis_total['ngarep_bayar']) ?></td>
+                                                <td class="text-end text-secondary"><?= kbap_home_rp($jenis_total['ngempi_bayar']) ?></td>
+                                                <td class="text-end"><?= kbap_home_rp($jenis_grand_total) ?></td>
+                                                <td class="text-end pe-3">
+                                                    <?= kbap_home_pct(kbap_home_persen($jenis_total['ngarep_bayar'], $jenis_grand_total)) ?>%
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+                            <?php if ($ada_jenis_lain) : ?>
+                                <div class="px-3 py-2 text-muted border-top" style="font-size: .72rem;">
+                                    Termasuk pembayaran dari jenis semeton lain (pemangku):
+                                    <strong><?= kbap_home_rp($jenis_total['lain_bayar']) ?></strong>
+                                    (<?= kbap_home_angka($jenis_total['lain_trx']) ?> transaksi).
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -1069,7 +1274,7 @@ $jam_data = date('d M Y H:i');
                                                             <div class="progress flex-grow-1" style="height: 7px;">
                                                                 <div class="progress-bar bg-primary" style="width: <?= $porsi ?>%"></div>
                                                             </div>
-                                                            <span class="text-muted small text-nowrap"><?= str_replace('.', ',', (string) $porsi) ?>%</span>
+                                                            <span class="text-muted small text-nowrap"><?= kbap_home_pct($porsi) ?>%</span>
                                                         </div>
                                                     </td>
                                                     <td class="text-end pe-3 <?= $w['sisa'] > 0 ? 'text-danger' : 'text-muted' ?>">
