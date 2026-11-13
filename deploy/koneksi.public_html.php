@@ -87,7 +87,9 @@ if ($env_user !== false) {
 // Membuat koneksi. Kegagalan ditangani agar kredensial/stack trace
 // tidak pernah tampil ke pengguna.
 try {
-    $koneksi = new mysqli($host, $username, $password, $database);
+    // "@" meredam PHP Warning saat placeholder __DB_HOST__ belum diisi
+    // (mis. paket baru diunggah). Kegagalan tetap ditangani catch di bawah.
+    $koneksi = @new mysqli($host, $username, $password, $database);
     if ($koneksi->connect_error) {
         throw new mysqli_sql_exception($koneksi->connect_error);
     }

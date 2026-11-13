@@ -91,7 +91,7 @@ function kbap_deny(int $status, string $message, bool $json = false): void
 
     header('Content-Type: text/html; charset=utf-8');
     echo '<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Akses Ditolak</title>'
-        . '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"></head>'
+        . '<link href="dist/vendor/bootstrap/5.3.3/bootstrap.min.css" rel="stylesheet"></head>'
         . '<body class="p-5"><div class="alert alert-danger"><strong>Akses ditolak.</strong><br>'
         . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</div>'
         . '<a href="javascript:history.back()" class="btn btn-secondary">Kembali</a></body></html>';

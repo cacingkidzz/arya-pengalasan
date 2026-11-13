@@ -31,13 +31,19 @@ Semua perintah di bawah dijalankan dari **root proyek** (folder yang sama dengan
 
 | Komponen | Syarat |
 |---|---|
-| PHP | **8.0+** (disarankan 8.1/8.2) |
+| PHP | **8.1+** (disarankan 8.2) |
 | Ekstensi | `mysqli`, `gd`, `mbstring`, `json`, `session` (disarankan `fileinfo`) |
 | Database | MySQL 5.7+ / MariaDB 10.4+ |
 | Web server | Apache (`.htaccess` dipakai). Nginx: lihat bagian [Nginx](#nginx). |
 | Ruang | ±15 MB kode + media (nota & kartu bisa ratusan MB) |
 
 Cek cepat lewat cPanel → **Select PHP Version** → *Extensions*.
+
+**Tanpa internet:** semua aset UI sudah lokal di `admin/dist/vendor/` (±6 MB,
+67 berkas), jadi halaman admin tidak butuh koneksi keluar. Kalau perlu
+memperbarui aset, jalankan `deploy/lokalkan-aset.ps1` di komputer yang
+tersambung internet (skrip mengunduh ulang dari CDN lalu menulis ulang tautan
+di 15 berkas PHP).
 
 ---
 

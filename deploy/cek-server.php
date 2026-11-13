@@ -58,7 +58,7 @@ function tambah(string $nama, bool $ok, string $nilai = '', string $catatan = ''
 }
 
 // ---------------------------------------------------------------- cek dasar
-tambah('Versi PHP', version_compare(PHP_VERSION, '8.0', '>='), PHP_VERSION, 'Minimal PHP 8.0');
+tambah('Versi PHP', version_compare(PHP_VERSION, '8.1', '>='), PHP_VERSION, 'Minimal PHP 8.1 (disarankan 8.2)');
 
 foreach (['mysqli', 'gd', 'mbstring', 'json', 'session'] as $ext) {
     tambah('Ekstensi ' . $ext, extension_loaded($ext), extension_loaded($ext) ? 'aktif' : 'tidak aktif');

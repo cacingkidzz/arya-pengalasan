@@ -76,14 +76,20 @@ Cocok dijalankan di XAMPP (lokal) maupun shared hosting cPanel.
 
 | Komponen | Minimum | Disarankan |
 |---|---|---|
-| PHP | 8.0 | 8.1 / 8.2 |
+| PHP | 8.1 | 8.2 |
 | MySQL / MariaDB | MySQL 5.7 / MariaDB 10.4 | MariaDB 10.4+ |
 | Ekstensi PHP | `mysqli`, `gd`, `mbstring`, `json` | + `fileinfo` |
 | Web server | Apache (mod_rewrite tidak wajib) | Apache 2.4 |
 
 Aplikasi **tidak** memerlukan Composer, Node.js, atau internet saat dipakai —
-semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2) sudah ada di
-`admin/dist/`.
+semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2, Font Awesome,
+html5-qrcode, pdfmake, dll.) sudah disimpan lokal di `admin/dist/vendor/`
+(67 berkas, ±6 MB). Sebelumnya aset ini dimuat dari CDN; pelokalan dilakukan
+sekali lewat `deploy/lokalkan-aset.ps1` (skrip reproduktif, aman dijalankan ulang).
+
+> Konsekuensinya: halaman admin tetap tampil rapi walau server hosting tanpa
+> akses internet keluar, dan tidak ada data warga yang bocor ke pihak ketiga
+> lewat permintaan CDN.
 
 ---
 
@@ -106,7 +112,7 @@ semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2) sudah ada di
 │   ├── konten/                # tampilan tiap menu
 │   ├── aksi/                  # proses tulis (simpan/ubah/hapus)
 │   ├── migrasi/               # migrasi SQL/PHP bertahap
-│   ├── dist/                  # aset UI (Bootstrap, jQuery, DataTables)
+│   ├── dist/                  # aset UI (adminlte + vendor lokal, tanpa CDN)
 │   ├── libs/phpqrcode/        # generator QR
 │   ├── uploads/               # nota unggahan   (TIDAK ikut repo)
 │   ├── kartu_anggota/         # kartu JPG hasil generate (TIDAK ikut repo)
@@ -119,6 +125,7 @@ semua aset UI (Bootstrap, jQuery, DataTables, SweetAlert2) sudah ada di
 │   ├── public_html.htaccess   # template .htaccess root
 │   ├── koneksi.public_html.php# template admin/koneksi.php
 │   ├── cek-server.php         # diagnosa sekali pakai (hapus setelah dipakai)
+│   ├── lokalkan-aset.ps1      # unduh ulang aset CDN -> admin/dist/vendor
 │   └── README.md              # panduan deploy lengkap
 ├── arsip/                     # berkas lama yang tidak dipakai
 └── .gitignore

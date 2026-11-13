@@ -37,7 +37,7 @@ $file_url  = 'kartu_anggota/' . rawurlencode($file_name);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kartu Anggota - <?= htmlspecialchars($nama, ENT_QUOTES, 'UTF-8') ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="dist/vendor/bootstrap/5.3.0/bootstrap.min.css" rel="stylesheet">
 </head>
 
 <body>
@@ -57,7 +57,7 @@ $file_url  = 'kartu_anggota/' . rawurlencode($file_name);
         <?php } ?>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="dist/vendor/bootstrap/5.3.0/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

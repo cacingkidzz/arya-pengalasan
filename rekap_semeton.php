@@ -10,10 +10,10 @@ include 'admin/koneksi.php'; // Pastikan koneksi ke database sudah benar
     <title>Rekap Semeton | Arya Pengalasan Pusat</title>
     <link rel="icon" type="image/png" href="admin/dist/assets/img/bg-logo.png">
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="admin/dist/vendor/google-fonts/inter.css" rel="stylesheet">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="admin/dist/vendor/bootstrap/5.3.3/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="admin/dist/vendor/font-awesome/css/all.min.css">
 
     <style>
         :root {
@@ -212,7 +212,7 @@ include 'admin/koneksi.php'; // Pastikan koneksi ke database sudah benar
         </div>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="admin/dist/vendor/bootstrap/5.3.3/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

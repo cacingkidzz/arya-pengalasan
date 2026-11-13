@@ -29,7 +29,7 @@ $result_punia = $stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <title>Cetak Laporan Punia - <?= htmlspecialchars((string) $odalan['nama_odalan'], ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="dist/vendor/bootstrap/5.3.0/bootstrap.min.css">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
