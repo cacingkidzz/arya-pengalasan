@@ -2,4 +2,5 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/aryp4685/public_html/data.aryapengalasan-pusat.org/
-    - /usr/bin/find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec /bin/cp -R {} $DEPLOYPATH \;
+    - /bin/mkdir -p $DEPLOYPATH
+    - /usr/bin/find . -mindepth 1 -maxdepth 1 ! -name '.git' ! -name '.cpanel.yml' -exec /bin/cp -R {} $DEPLOYPATH \;
