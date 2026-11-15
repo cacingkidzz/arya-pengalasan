@@ -132,10 +132,10 @@ require_once __DIR__ . '/../koneksi.php';
     $tipe  = '';
     $nilai = [];
     if ($f_q !== '') {
-        $where[] = '(s.nama LIKE ? OR s.user_id LIKE ?)';
+        $where[] = '(s.nama LIKE ? OR s.user_id LIKE ? OR s.no_hp LIKE ?)';
         $like    = '%' . $f_q . '%';
-        $tipe   .= 'ss';
-        array_push($nilai, $like, $like);
+        $tipe   .= 'sss';
+        array_push($nilai, $like, $like, $like);
     }
     if ($f_wilayah > 0) {
         $where[]  = 's.wilayah = ?';
@@ -144,14 +144,14 @@ require_once __DIR__ . '/../koneksi.php';
     }
     $where_sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
-    $sql_select = "SELECT s.id, s.user_id, s.nama, s.jenis_user, w.nama_wilayah, sw.nama_sub,
+    $sql_select = "SELECT s.id, s.user_id, s.nama, s.jenis_user, s.no_hp, w.nama_wilayah, sw.nama_sub,
               COALESCE(SUM(h.jumlah_hutang), 0) AS total_hutang,
               CASE WHEN COALESCE(SUM(h.jumlah_hutang), 0) = 0 THEN 'Lunas' ELSE 'Belum Lunas' END AS status
               FROM semeton s
               LEFT JOIN hutang h ON s.id = h.id_semeton
               LEFT JOIN wilayah w ON s.wilayah = w.id_wilayah
               LEFT JOIN sub_wilayah sw ON s.sub_wilayah = sw.id_sub";
-    $sql_group = " GROUP BY s.id, s.user_id, s.nama, s.jenis_user, w.nama_wilayah, sw.nama_sub";
+    $sql_group = " GROUP BY s.id, s.user_id, s.nama, s.jenis_user, s.no_hp, w.nama_wilayah, sw.nama_sub";
 
     $sql_agregat        = $sql_select . $where_sql . $sql_group;
     $sql_agregat_global = $sql_select . $sql_group;
@@ -363,6 +363,7 @@ require_once __DIR__ . '/../koneksi.php';
                                 <th>Nama Lengkap</th>
                                 <th>Wilayah</th>
                                 <th>Sub Wilayah</th>
+                                <th>No. HP</th>
                                 <th>Jumlah Hutang</th>
                                 <th class="text-center">Status</th>
                                 <th class="text-center">Opsi</th>
@@ -371,7 +372,7 @@ require_once __DIR__ . '/../koneksi.php';
                         <tbody>
                             <?php if ($jumlah_filter === 0) : ?>
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-5">
+                                    <td colspan="8" class="text-center text-muted py-5">
                                         <?php if ($f_q !== '' || $f_wilayah > 0 || $f_status !== '') : ?>
                                             Tidak ada semeton yang cocok dengan filter. <a href="<?= $esc($url_reset) ?>">Reset filter</a>.
                                         <?php else : ?>
@@ -391,6 +392,24 @@ require_once __DIR__ . '/../koneksi.php';
                                     </td>
                                     <td><?= $esc($row['nama_wilayah']); ?></td>
                                     <td><?= $esc($row['nama_sub']); ?></td>
+                                    <td>
+                                        <?php $no_hp_isi = trim((string) ($row['no_hp'] ?? '')); ?>
+                                        <button type="button"
+                                            class="btn btn-sm btn-link p-0 text-decoration-none btn-no-hp"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalNoHp"
+                                            data-userid="<?= $esc($row['user_id']); ?>"
+                                            data-nama="<?= $esc($row['nama']); ?>"
+                                            data-nohp="<?= $esc($no_hp_isi === '-' ? '' : $no_hp_isi); ?>"
+                                            title="Klik untuk mengisi / mengubah No. HP">
+                                            <?php if ($no_hp_isi !== '' && $no_hp_isi !== '-') : ?>
+                                                <span class="text-dark"><?= $esc($no_hp_isi); ?></span>
+                                                <i class="fas fa-pen text-primary ms-1" style="font-size: 11px;"></i>
+                                            <?php else : ?>
+                                                <span class="badge bg-soft-danger px-2 py-1"><i class="fas fa-phone-slash me-1"></i>Isi No. HP</span>
+                                            <?php endif; ?>
+                                        </button>
+                                    </td>
                                     <td class="fw-bold text-dark">Rp <?= number_format((float) $row['total_hutang'], 0, ',', '.'); ?></td>
                                     <td class="text-center">
                                         <?php if ($row['status'] == 'Lunas') : ?>
@@ -463,6 +482,49 @@ require_once __DIR__ . '/../koneksi.php';
     </div>
 </main>
 
+<!-- ================= MODAL NO. HP ================= -->
+<div class="modal fade" id="modalNoHp" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <form action="aksi/aksi_no_hp.php" method="POST" id="formNoHp">
+                <?= kbap_csrf_field() ?>
+                <input type="hidden" name="aksi" value="simpan_no_hp">
+                <input type="hidden" name="sumber" value="pembayaran">
+                <input type="hidden" name="user_id" id="noHpUserId">
+                <input type="hidden" name="q" value="<?= $esc($f_q) ?>">
+                <input type="hidden" name="wilayah" value="<?= (int) $f_wilayah ?>">
+                <input type="hidden" name="status" value="<?= $esc($f_status) ?>">
+                <input type="hidden" name="per" value="<?= (int) $per ?>">
+                <input type="hidden" name="hal" value="<?= (int) $hal ?>">
+
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-phone me-2"></i>No. HP Semeton</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="small text-muted mb-1">Semeton</p>
+                    <p class="fw-bold mb-3" id="noHpNama">-</p>
+
+                    <label class="form-label" for="noHpInput">No. HP / WhatsApp</label>
+                    <input type="tel" class="form-control" id="noHpInput" name="no_hp"
+                        maxlength="15" inputmode="numeric" autocomplete="off"
+                        placeholder="08xxxxxxxxxx">
+                    <div class="form-text">
+                        Hanya angka, <strong>8&ndash;15 digit</strong>. Boleh diawali <code>0</code> atau <code>62</code>.
+                        Kosongkan lalu simpan untuk menghapus nomor.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Simpan No. HP</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="qrScannerModal" data-bs-backdrop="static" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0">
@@ -482,6 +544,32 @@ require_once __DIR__ . '/../koneksi.php';
 <script>
     // Inisialisasi variabel global
     var html5QrCode = null;
+
+    // ===== Modal No. HP: isi otomatis dari baris yang diklik =====
+    document.addEventListener('DOMContentLoaded', function() {
+        var modalNoHp = document.getElementById('modalNoHp');
+        if (!modalNoHp) return;
+
+        var inputNoHp = document.getElementById('noHpInput');
+
+        modalNoHp.addEventListener('show.bs.modal', function(event) {
+            var btn = event.relatedTarget;
+            if (!btn) return;
+            document.getElementById('noHpUserId').value = btn.getAttribute('data-userid') || '';
+            document.getElementById('noHpNama').textContent = btn.getAttribute('data-nama') || '-';
+            inputNoHp.value = btn.getAttribute('data-nohp') || '';
+        });
+
+        modalNoHp.addEventListener('shown.bs.modal', function() {
+            inputNoHp.focus();
+            inputNoHp.select();
+        });
+
+        // Hanya angka yang boleh diketik (server tetap memvalidasi).
+        inputNoHp.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+    });
 
     // 1. Fungsi untuk Membuka Modal & Jalankan Kamera
     function scanQR() {

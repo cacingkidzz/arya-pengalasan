@@ -540,6 +540,26 @@ date_default_timezone_set('Asia/Makassar');
         </script>
     <?php endif; ?>
 
+    <?php if (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'no_hp'): ?>
+        <script>
+            Swal.fire({
+                title: 'Berhasil!',
+                text: 'No. HP semeton berhasil disimpan.',
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
+        </script>
+    <?php elseif (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'no_hp_gagal'): ?>
+        <script>
+            Swal.fire({
+                title: 'No. HP Tidak Valid',
+                html: "Nomor HP harus berupa angka <strong>8&ndash;15 digit</strong>.<br>Contoh: <code>081234567890</code> atau <code>6281234567890</code>.",
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
+        </script>
+    <?php endif; ?>
+
     <script>
         function getSubWilayah(idWilayah) {
             $.ajax({

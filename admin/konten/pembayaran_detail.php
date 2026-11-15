@@ -15,7 +15,7 @@ if (!isset($koneksi) || (isset($koneksi) && $koneksi->connect_error)) {
 } else {
 
     $query = "SELECT 
-        u.username, h.id_user, s.user_id, s.nama, s.jenis_user, 
+        u.username, h.id_user, s.id AS id_semeton, s.user_id, s.nama, s.jenis_user, s.no_hp, 
         w.nama_wilayah, sw.nama_sub, o.nama_odalan, o.id AS id_odalan, 
         h.jumlah_hutang, h.status,
         (SELECT p.id_pembayaran FROM pembayaran p 
@@ -42,6 +42,15 @@ if (!isset($koneksi) || (isset($koneksi) && $koneksi->connect_error)) {
     }
 
     $userInfo = !empty($dataHutang) ? $dataHutang[0] : null;
+
+    // No. HP untuk tombol isi/ubah cepat (fitur 2026-11-15).
+    $no_hp_isi = '';
+    if ($userInfo) {
+        $no_hp_isi = trim((string) ($userInfo['no_hp'] ?? ''));
+        if ($no_hp_isi === '-') {
+            $no_hp_isi = '';
+        }
+    }
 
     // Riwayat pembayaran yang dibatalkan (soft-cancel) untuk semeton ini.
     $dataBatal = [];
@@ -103,6 +112,24 @@ if (!isset($koneksi) || (isset($koneksi) && $koneksi->connect_error)) {
                             </li>
                             <li class="list-group-item">
                                 Jenis <span class="badge bg-info float-end"><?= htmlspecialchars((string) ($userInfo['jenis_user'] ?? '-'), ENT_QUOTES, 'UTF-8') ?></span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                                <span>No. HP</span>
+                                <button type="button"
+                                    class="btn btn-sm <?= $no_hp_isi !== '' ? 'btn-outline-primary' : 'btn-primary' ?> rounded-pill btn-no-hp"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalNoHp"
+                                    data-userid="<?= htmlspecialchars((string) ($userInfo['user_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-nama="<?= htmlspecialchars((string) ($userInfo['nama'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-nohp="<?= htmlspecialchars($no_hp_isi, ENT_QUOTES, 'UTF-8') ?>"
+                                    title="Klik untuk mengisi / mengubah No. HP">
+                                    <?php if ($no_hp_isi !== '') : ?>
+                                        <i class="fas fa-phone me-1"></i><?= htmlspecialchars($no_hp_isi, ENT_QUOTES, 'UTF-8') ?>
+                                        <i class="fas fa-pen ms-1" style="font-size: 10px;"></i>
+                                    <?php else : ?>
+                                        <i class="fas fa-plus me-1"></i>Isi No. HP
+                                    <?php endif; ?>
+                                </button>
                             </li>
                         </ul>
                     </div>
@@ -260,6 +287,45 @@ if (!isset($koneksi) || (isset($koneksi) && $koneksi->connect_error)) {
 </main>
 
 
+<!-- ================= MODAL NO. HP ================= -->
+<div class="modal fade" id="modalNoHp" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <form action="aksi/aksi_no_hp.php" method="POST" id="formNoHp">
+                <?= kbap_csrf_field() ?>
+                <input type="hidden" name="aksi" value="simpan_no_hp">
+                <input type="hidden" name="sumber" value="detail">
+                <input type="hidden" name="user_id" id="noHpUserId">
+
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="fas fa-phone me-2"></i>No. HP Semeton</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="small text-muted mb-1">Semeton</p>
+                    <p class="fw-bold mb-3" id="noHpNama">-</p>
+
+                    <label class="form-label" for="noHpInput">No. HP / WhatsApp</label>
+                    <input type="tel" class="form-control" id="noHpInput" name="no_hp"
+                        maxlength="15" inputmode="numeric" autocomplete="off"
+                        placeholder="08xxxxxxxxxx">
+                    <div class="form-text">
+                        Hanya angka, <strong>8&ndash;15 digit</strong>. Boleh diawali <code>0</code> atau <code>62</code>.
+                        Kosongkan lalu simpan untuk menghapus nomor.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Simpan No. HP</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <!-- ================= MODAL BAYAR ================= -->
 <div class="modal fade" id="modalBayar">
     <div class="modal-dialog">
@@ -410,6 +476,31 @@ if (!isset($koneksi) || (isset($koneksi) && $koneksi->connect_error)) {
                 batal_piodalan.value = this.dataset.piodalan;
             }
         });
+
+        // ---------------------------------------------------------------
+        // Modal No. HP: isi otomatis dari tombol yang diklik.
+        // ---------------------------------------------------------------
+        const modalNoHp = document.getElementById('modalNoHp');
+        const inputNoHp = document.getElementById('noHpInput');
+
+        if (modalNoHp && inputNoHp) {
+            modalNoHp.addEventListener('show.bs.modal', function(event) {
+                const btn = event.relatedTarget;
+                if (!btn) return;
+                document.getElementById('noHpUserId').value = btn.getAttribute('data-userid') || '';
+                document.getElementById('noHpNama').textContent = btn.getAttribute('data-nama') || '-';
+                inputNoHp.value = btn.getAttribute('data-nohp') || '';
+            });
+
+            modalNoHp.addEventListener('shown.bs.modal', function() {
+                inputNoHp.focus();
+                inputNoHp.select();
+            });
+
+            inputNoHp.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+            });
+        }
 
         // ---------------------------------------------------------------
         // Cegah klik ganda pada tombol Bayar.
