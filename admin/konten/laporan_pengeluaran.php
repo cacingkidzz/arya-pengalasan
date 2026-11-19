@@ -245,7 +245,19 @@ if ($items) {
 
                 <div class="row mt-3">
                     <div class="col-12">
+                        <?php if (empty($grouped_pengeluarans)): ?>
+                            <div class="alert alert-info mb-0">
+                                <i class="fa-solid fa-inbox me-1"></i>
+                                Tidak ada data pengeluaran untuk odalan ini.
+                            </div>
+                        <?php else: ?>
                         <div class="table-responsive">
+                            <!--
+                                Semua baris <tbody> WAJIB berisi tepat 6 <td> (sesuai 6 <th>).
+                                Jangan memakai colspan di sini: DataTables menghitung jumlah
+                                elemen <td> (colspan tetap dihitung 1) sehingga muncul
+                                "Incorrect column count" (tn/18).
+                            -->
                             <table id="pengeluaranTable" class="table table-bordered table-hover align-middle">
                                 <thead class="table-dark">
                                     <tr>
@@ -258,50 +270,46 @@ if ($items) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (empty($grouped_pengeluarans)): ?>
-                                        <tr>
-                                            <td colspan="6" class="text-center py-4 text-muted">
-                                                <i class="fa-solid fa-inbox fa-2x mb-2 d-block"></i>
-                                                Tidak ada data pengeluaran untuk odalan ini.
-                                            </td>
+                                    <?php foreach ($grouped_pengeluarans as $tanggal => $data): ?>
+                                        <tr class="table-primary">
+                                            <td><b>Total <?= $esc($fmt_tanggal($tanggal)) ?></b></td>
+                                            <td class="text-muted small"><?= (int) count($data['items']) ?> baris</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td class="text-end"><b><?= $esc($rupiah($data['total'])) ?></b></td>
                                         </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($grouped_pengeluarans as $tanggal => $data): ?>
-                                            <tr class="table-primary">
-                                                <td><b>Total <?= $esc($fmt_tanggal($tanggal)) ?></b></td>
-                                                <td colspan="4" class="text-muted small">
-                                                    <?= (int) count($data['items']) ?> baris
+
+                                        <?php foreach ($data['items'] as $pengeluaran): ?>
+                                            <tr>
+                                                <td><?= $esc($fmt_tanggal($tanggal)) ?></td>
+                                                <td><?= $esc($pengeluaran['uraian'] !== '' ? $pengeluaran['uraian'] : '-') ?></td>
+                                                <td class="small">
+                                                    <?= $esc($pengeluaran['nota'] !== '' ? $pengeluaran['nota'] : ($pengeluaran['rincian'] !== '' ? $pengeluaran['rincian'] : '-')) ?>
                                                 </td>
-                                                <td class="text-end"><b><?= $esc($rupiah($data['total'])) ?></b></td>
+                                                <td><?= $esc($pengeluaran['kategori']) ?></td>
+                                                <td class="text-center">
+                                                    <span class="badge <?= $pengeluaran['sumber'] === 'Lama' ? 'bg-secondary' : 'bg-info text-dark' ?>">
+                                                        <?= $esc($pengeluaran['sumber']) ?>
+                                                    </span>
+                                                </td>
+                                                <td class="text-end"><?= $esc($rupiah($pengeluaran['jumlah'])) ?></td>
                                             </tr>
-
-                                            <?php foreach ($data['items'] as $pengeluaran): ?>
-                                                <tr>
-                                                    <td><?= $esc($fmt_tanggal($tanggal)) ?></td>
-                                                    <td><?= $esc($pengeluaran['uraian'] !== '' ? $pengeluaran['uraian'] : '-') ?></td>
-                                                    <td class="small">
-                                                        <?= $esc($pengeluaran['nota'] !== '' ? $pengeluaran['nota'] : ($pengeluaran['rincian'] !== '' ? $pengeluaran['rincian'] : '-')) ?>
-                                                    </td>
-                                                    <td><?= $esc($pengeluaran['kategori']) ?></td>
-                                                    <td class="text-center">
-                                                        <span class="badge <?= $pengeluaran['sumber'] === 'Lama' ? 'bg-secondary' : 'bg-info text-dark' ?>">
-                                                            <?= $esc($pengeluaran['sumber']) ?>
-                                                        </span>
-                                                    </td>
-                                                    <td class="text-end"><?= $esc($rupiah($pengeluaran['jumlah'])) ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
                                         <?php endforeach; ?>
+                                    <?php endforeach; ?>
 
-                                        <tr class="table-dark">
-                                            <td><b>Total Keseluruhan</b></td>
-                                            <td colspan="4"></td>
-                                            <td class="text-end"><b><?= $esc($rupiah($totalKeseluruhan)) ?></b></td>
-                                        </tr>
-                                    <?php endif; ?>
+                                    <tr class="table-dark">
+                                        <td><b>Total Keseluruhan</b></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td></td>
+                                        <td class="text-end"><b><?= $esc($rupiah($totalKeseluruhan)) ?></b></td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
