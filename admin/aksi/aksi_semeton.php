@@ -156,7 +156,10 @@ function kbap_kumpulkan_data($koneksi): ?array
         return null;
     }
 
-    $no_hp  = kbap_teks_opsional($_POST['no_hp'] ?? '', 15);
+    // Kolom `semeton.no_hp` NOT NULL (tanpa default) → kosong disimpan sebagai ''.
+    // Sebelumnya NULL dari kbap_teks_opsional() membuat INSERT/UPDATE gagal
+    // ("Column 'no_hp' cannot be null") dan halaman berakhir fatal error.
+    $no_hp  = kbap_teks_opsional($_POST['no_hp'] ?? '', 15) ?? '';
     $alamat = kbap_input($_POST['alamat'] ?? '');
     if (mb_strlen($alamat) > 65535) {
         return null;
@@ -281,27 +284,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $aksi_post === 'tambah') {
         $tipe  = implode('', array_column($kolom, 1));
         $nilai = array_column($kolom, 0);
         $stmt->bind_param($tipe, ...$nilai);
-        if ($stmt->execute()) {
-            $id_baru = (int) $stmt->insert_id;
-            $stmt->close();
-            kbap_audit_log($koneksi, 'semeton', 'INSERT', $id_baru, null, [
-                'user_id'        => $user_id,
-                'nama'           => $data['nama'],
-                'nik'            => $data['nik'],
-                'jenis_kelamin'  => $data['jenis_kelamin'],
-                'no_kk'          => $data['no_kk'],
-                'jenis_user'     => $data['jenis_user'],
-                'status'         => $status,
-            ], 'Tambah semeton ' . $user_id);
-            header('Location: ../index.php?menu=semeton&status=sukses');
-            exit;
+        try {
+            if ($stmt->execute()) {
+                $id_baru = (int) $stmt->insert_id;
+                $stmt->close();
+                kbap_audit_log($koneksi, 'semeton', 'INSERT', $id_baru, null, [
+                    'user_id'        => $user_id,
+                    'nama'           => $data['nama'],
+                    'nik'            => $data['nik'],
+                    'jenis_kelamin'  => $data['jenis_kelamin'],
+                    'no_kk'          => $data['no_kk'],
+                    'jenis_user'     => $data['jenis_user'],
+                    'status'         => $status,
+                ], 'Tambah semeton ' . $user_id);
+                header('Location: ../index.php?menu=semeton&status=sukses');
+                exit;
+            }
+        } catch (Throwable $e) {
+            // Jangan tampilkan fatal error ke pengguna; catat ke log lalu redirect.
+            error_log('KBAP tambah semeton gagal: ' . $e->getMessage());
         }
         $stmt->close();
     }
 
     // Gagal simpan: hapus QR yang sudah dibuat agar tidak ada file yatim.
-    if (file_exists($qr_path)) {
-        unlink($qr_path);
+    $qr_file = __DIR__ . '/../qr_codes/' . $qr_path;
+    if (is_file($qr_file)) {
+        @unlink($qr_file);
     }
     header('Location: ../index.php?menu=semeton&status=gagal');
     exit;
@@ -364,20 +373,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $aksi_post === 'edit') {
         $nilai = array_column($kolom, 0);
         $nilai[] = $id;
         $stmt->bind_param($tipe, ...$nilai);
-        if ($stmt->execute()) {
-            $stmt->close();
-            kbap_audit_log($koneksi, 'semeton', 'UPDATE', $id, $data_lama, [
-                'nama'           => $data['nama'],
-                'nik'            => $data['nik'],
-                'jenis_kelamin'  => $data['jenis_kelamin'],
-                'no_kk'          => $data['no_kk'],
-                'tanggal_lahir'  => $data['tanggal_lahir'],
-                'jenis_user'     => $data['jenis_user'],
-                'jabatan'        => $data['jabatan'],
-                'status'         => $status,
-            ], 'Ubah semeton id ' . $id);
-            header('Location: ../index.php?menu=semeton&status=edit');
-            exit;
+        try {
+            if ($stmt->execute()) {
+                $stmt->close();
+                kbap_audit_log($koneksi, 'semeton', 'UPDATE', $id, $data_lama, [
+                    'nama'           => $data['nama'],
+                    'nik'            => $data['nik'],
+                    'jenis_kelamin'  => $data['jenis_kelamin'],
+                    'no_kk'          => $data['no_kk'],
+                    'tanggal_lahir'  => $data['tanggal_lahir'],
+                    'jenis_user'     => $data['jenis_user'],
+                    'jabatan'        => $data['jabatan'],
+                    'status'         => $status,
+                ], 'Ubah semeton id ' . $id);
+                header('Location: ../index.php?menu=semeton&status=edit');
+                exit;
+            }
+        } catch (Throwable $e) {
+            error_log('KBAP ubah semeton gagal: ' . $e->getMessage());
         }
         $stmt->close();
     }
