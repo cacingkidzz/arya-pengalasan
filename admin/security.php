@@ -149,7 +149,8 @@ function kbap_allowed_menus(string $role): array
 {
     $semua = [
         'home', 'user', 'wilayah', 'sub_wilayah', 'piodalan', 'semeton', 'pembayaran',
-        'pembayaran_detail', 'rekap_urunan', 'rekap_filter', 'rekap_hari', 'rekap_bayar',
+        'pembayaran_massal', 'pembayaran_detail', 'rekap_urunan', 'rekap_filter',
+        'rekap_hari', 'rekap_bayar',
         'semeton_baru', 'rekap_bayar_piodalan', 'dana_punia', 'rekap_punia',
         'rekap_punia_hari_ini', 'rekap_punia_filter', 'kategori_pengeluaran', 'pengeluaran',
         'laporan_pengeluaran', 'detail_transaksi', 'rekap_piodalan_sinkron', 'double',
@@ -162,8 +163,9 @@ function kbap_allowed_menus(string $role): array
             return $semua;
         case 'bendahara':
             return [
-                'home', 'pembayaran', 'pembayaran_detail', 'rekap_urunan', 'rekap_filter',
-                'rekap_hari', 'rekap_bayar', 'rekap_bayar_piodalan', 'dana_punia',
+                'home', 'pembayaran', 'pembayaran_massal', 'pembayaran_detail',
+                'rekap_urunan', 'rekap_filter', 'rekap_hari', 'rekap_bayar',
+                'rekap_bayar_piodalan', 'dana_punia',
                 'rekap_punia', 'rekap_punia_hari_ini', 'rekap_punia_filter',
                 'pengeluaran', 'laporan_pengeluaran', 'detail_transaksi',
                 'rekap_tunggakan', 'laporan_rekap_semeton', 'laporan_laba_rugi',

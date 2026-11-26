@@ -257,6 +257,9 @@ require_once __DIR__ . '/../koneksi.php';
                     <p class="text-muted small">Kelola iuran dan pantau status pelunasan semeton.</p>
                 </div>
                 <div class="col-sm-6 text-end">
+                    <a href="index.php?menu=pembayaran_massal" class="btn btn-success shadow px-4 py-2 me-2">
+                        <i class="fas fa-people-group me-2"></i> Bayar Massal
+                    </a>
                     <button class="btn btn-primary shadow px-4 py-2 me-2" onclick="scanQR()">
                         <i class="fas fa-qrcode me-2"></i> Scan QR Pembayaran
                     </button>

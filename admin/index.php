@@ -577,6 +577,47 @@ date_default_timezone_set('Asia/Makassar');
                 confirmButtonText: 'OK'
             });
         </script>
+    <?php elseif (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'bayar_massal'): ?>
+        <?php
+        $bm_ok      = (isset($_GET['ok']) && is_scalar($_GET['ok'])) ? (int) $_GET['ok'] : 0;
+        $bm_lew     = (isset($_GET['lew']) && is_scalar($_GET['lew'])) ? (int) $_GET['lew'] : 0;
+        $bm_nominal = (isset($_GET['nominal']) && is_scalar($_GET['nominal'])) ? (float) $_GET['nominal'] : 0;
+
+        $bm_html  = '<strong>' . number_format($bm_ok, 0, ',', '.') . ' semeton</strong> berhasil dicatat sebesar '
+            . '<strong>Rp ' . number_format($bm_nominal, 0, ',', '.') . '</strong>.';
+        if ($bm_lew > 0) {
+            $bm_html .= '<br><span class="text-muted small">' . number_format($bm_lew, 0, ',', '.')
+                . ' tagihan dilewati (sudah lunas / sudah tercatat).</span>';
+        }
+        $bm_html .= '<br><span class="text-muted small">Setiap semeton mendapat nota tersendiri.</span>';
+        ?>
+        <script>
+            Swal.fire({
+                title: 'Pembayaran Massal Berhasil',
+                html: <?= json_encode($bm_html, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
+        </script>
+    <?php elseif (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'bayar_massal_gagal'): ?>
+        <?php
+        $bm_info = (isset($_GET['info']) && is_string($_GET['info'])) ? trim($_GET['info']) : '';
+
+        $bm_html = 'Tidak ada pembayaran yang tercatat.';
+        if ($bm_info !== '') {
+            $bm_html .= '<br><span class="text-muted small">'
+                . htmlspecialchars($bm_info, ENT_QUOTES, 'UTF-8') . '</span>';
+        }
+        $bm_html .= '<br><span class="text-muted small">Pastikan semeton yang dipilih masih punya tagihan pada odalan tersebut.</span>';
+        ?>
+        <script>
+            Swal.fire({
+                title: 'Pembayaran Massal Gagal',
+                html: <?= json_encode($bm_html, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
+        </script>
     <?php endif; ?>
 
     <script>

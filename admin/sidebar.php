@@ -54,9 +54,10 @@ if (!function_exists('kbap_sidebar_grup')) {
                 'judul' => 'Transaksi',
                 'ikon'  => 'bi-cash-stack',
                 'items' => [
-                    ['menu' => 'pembayaran',  'label' => 'Pembayaran',       'ikon' => 'bi-wallet2'],
-                    ['menu' => 'rekap_hari',  'label' => 'Kasir & Tunggakan', 'ikon' => 'bi-calendar-check'],
-                    ['menu' => 'pengeluaran', 'label' => 'Pengeluaran',        'ikon' => 'bi-cash-coin'],
+                    ['menu' => 'pembayaran',        'label' => 'Pembayaran',       'ikon' => 'bi-wallet2'],
+                    ['menu' => 'pembayaran_massal', 'label' => 'Bayar Massal',     'ikon' => 'bi-people'],
+                    ['menu' => 'rekap_hari',        'label' => 'Kasir & Tunggakan', 'ikon' => 'bi-calendar-check'],
+                    ['menu' => 'pengeluaran',       'label' => 'Pengeluaran',       'ikon' => 'bi-cash-coin'],
                 ],
             ],
             [

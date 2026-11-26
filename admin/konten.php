@@ -34,6 +34,9 @@
             case 'pembayaran':
                 include('konten/pembayaran.php'); // Menyertakan halaman siswa.php
                 break;
+            case 'pembayaran_massal':
+                include('konten/pembayaran_massal.php');
+                break;
             case 'pembayaran_detail':
                 include('konten/pembayaran_detail.php'); // Menyertakan halaman tambah guru.php
                 break;
