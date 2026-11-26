@@ -166,6 +166,71 @@ if ($f_odalan > 0) {
 }
 
 // ---------------------------------------------------------------------
+// 5b. Total per metode pembayaran (periode + filter yang sama)
+//     Satu query GROUP BY, tanpa N+1. Metode di luar enum tetap
+//     ditampilkan sebagai baris tambahan (label apa adanya).
+// ---------------------------------------------------------------------
+$metode_info = [
+    'tunai'    => ['Tunai',    'bi-cash-stack', 'success',   'text-white'],
+    'transfer' => ['Transfer', 'bi-bank',       'primary',   'text-white'],
+    'QRIS'     => ['QRIS',     'bi-qr-code',    'warning',   'text-dark'],
+];
+$metode_kosong = [
+    'jml'             => 0,
+    'total'           => 0.0,
+    'total_ini'       => 0.0,
+    'total_tunggakan' => 0.0,
+    'total_muka'      => 0.0,
+];
+$metode_ringkas = [];
+foreach ($metode_info as $kunci => $_) {
+    $metode_ringkas[$kunci] = $metode_kosong;
+}
+
+$sql_metode   = "SELECT p.metode_pembayaran AS metode,
+                        COUNT(*) AS jml,
+                        COALESCE(SUM(p.jumlah_bayar), 0) AS total";
+$tipe_metode  = '';
+$nilai_metode = [];
+if ($f_odalan > 0) {
+    // Placeholder SELECT muncul lebih dulu daripada placeholder WHERE.
+    $sql_metode .= ",
+                        COALESCE(SUM(CASE WHEN p.id_piodalan = ? THEN p.jumlah_bayar ELSE 0 END), 0) AS total_ini,
+                        COALESCE(SUM(CASE WHEN p.id_piodalan < ? THEN p.jumlah_bayar ELSE 0 END), 0) AS total_tunggakan,
+                        COALESCE(SUM(CASE WHEN p.id_piodalan > ? THEN p.jumlah_bayar ELSE 0 END), 0) AS total_muka";
+    $tipe_metode  = 'iii';
+    $nilai_metode = [$f_odalan, $f_odalan, $f_odalan];
+}
+$sql_metode  .= ' FROM pembayaran p' . $where_sql . ' GROUP BY p.metode_pembayaran';
+$tipe_metode .= $tipe;
+$nilai_metode = array_merge($nilai_metode, $nilai);
+
+if ($stmt = $koneksi->prepare($sql_metode)) {
+    $stmt->bind_param($tipe_metode, ...$nilai_metode);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) {
+        $kunci = (string) $r['metode'];
+        // Enum menyimpan 'QRIS' kapital; samakan agar tidak terpecah dua baris.
+        foreach ($metode_info as $k => $_) {
+            if (strcasecmp($k, $kunci) === 0) {
+                $kunci = $k;
+                break;
+            }
+        }
+        if (!isset($metode_ringkas[$kunci])) {
+            $metode_ringkas[$kunci] = $metode_kosong;
+        }
+        $metode_ringkas[$kunci]['jml']             += (int) $r['jml'];
+        $metode_ringkas[$kunci]['total']           += (float) $r['total'];
+        $metode_ringkas[$kunci]['total_ini']       += (float) ($r['total_ini'] ?? 0);
+        $metode_ringkas[$kunci]['total_tunggakan'] += (float) ($r['total_tunggakan'] ?? 0);
+        $metode_ringkas[$kunci]['total_muka']      += (float) ($r['total_muka'] ?? 0);
+    }
+    $stmt->close();
+}
+
+// ---------------------------------------------------------------------
 // 6. Daftar pembayaran
 // ---------------------------------------------------------------------
 $data_rows = [];
@@ -360,6 +425,73 @@ $boleh_ubah_metode = in_array(kbap_role(), ['admin', 'bendahara'], true);
                     </div>
                 </div>
             </div>
+
+            <!-- Total per metode pembayaran (mengikuti filter aktif) -->
+            <?php if ($jml_masuk > 0) : ?>
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-header bg-white py-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                        <h6 class="mb-0 fw-bold text-primary">
+                            <i class="bi bi-credit-card-2-front"></i> Total per Metode Pembayaran
+                        </h6>
+                        <span class="badge bg-dark">
+                            <?= $rupiah($total_masuk) ?> &middot; <?= number_format($jml_masuk, 0, ',', '.') ?> transaksi
+                        </span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0" id="tabelMetode">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Metode</th>
+                                        <th class="text-end">Transaksi</th>
+                                        <th class="text-end">Nominal</th>
+                                        <th class="text-end">Porsi</th>
+                                        <th class="text-end">Odalan Ini</th>
+                                        <th class="text-end">Tunggakan</th>
+                                        <th class="text-end">Di Muka</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($metode_ringkas as $kunci => $m) :
+                                        [$label_m, $ikon_m, $warna_m, $teks_m] = $metode_info[$kunci] ?? [ucfirst((string) $kunci), 'bi-three-dots', 'secondary', 'text-white'];
+                                        $porsi_m = $total_masuk > 0 ? ((float) $m['total'] / $total_masuk) * 100 : 0;
+                                        ?>
+                                        <tr>
+                                            <td>
+                                                <span class="badge bg-<?= $esc($warna_m) ?> <?= $esc($teks_m) ?>">
+                                                    <i class="bi <?= $esc($ikon_m) ?> me-1"></i><?= $esc($label_m) ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-end"><?= number_format((int) $m['jml'], 0, ',', '.') ?></td>
+                                            <td class="text-end fw-bold"><?= $rupiah($m['total']) ?></td>
+                                            <td class="text-end" style="min-width:130px;">
+                                                <div class="progress" style="height:8px;">
+                                                    <div class="progress-bar bg-<?= $esc($warna_m) ?>" style="width:<?= number_format($porsi_m, 1, '.', '') ?>%"></div>
+                                                </div>
+                                                <small class="text-muted"><?= number_format($porsi_m, 1, ',', '.') ?>%</small>
+                                            </td>
+                                            <td class="text-end text-success"><?= $m['total_ini'] > 0 ? $rupiah($m['total_ini']) : '&mdash;' ?></td>
+                                            <td class="text-end text-danger"><?= $m['total_tunggakan'] > 0 ? $rupiah($m['total_tunggakan']) : '&mdash;' ?></td>
+                                            <td class="text-end text-primary"><?= $m['total_muka'] > 0 ? $rupiah($m['total_muka']) : '&mdash;' ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th>TOTAL</th>
+                                        <th class="text-end"><?= number_format($jml_masuk, 0, ',', '.') ?></th>
+                                        <th class="text-end"><?= $rupiah($total_masuk) ?></th>
+                                        <th class="text-end">100%</th>
+                                        <th class="text-end"><?= $rupiah($total_ini) ?></th>
+                                        <th class="text-end"><?= $rupiah($total_tunggakan) ?></th>
+                                        <th class="text-end"><?= $rupiah($total_muka) ?></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <!-- Rincian tunggakan per odalan lama -->
             <?php if (!empty($rincian_tunggakan)) : ?>
