@@ -213,6 +213,10 @@ $url_petugas = static function (int $id) use ($url_filter): string {
 $judul_periode = ($f_dari === $f_sampai)
     ? date('d-m-Y', strtotime($f_dari))
     : date('d-m-Y', strtotime($f_dari)) . ' s.d. ' . date('d-m-Y', strtotime($f_sampai));
+
+// Ubah metode pembayaran dari halaman ini hanya untuk role yang sama
+// dengan endpoint edit_pembayaran.php (admin + bendahara).
+$boleh_ubah_metode = in_array(kbap_role(), ['admin', 'bendahara'], true);
 ?>
 <main class="app-main">
     <div class="app-content-header py-3">
@@ -417,10 +421,49 @@ $judul_periode = ($f_dari === $f_sampai)
                             Belum ada pembayaran tercatat pada periode ini<?= $f_petugas > 0 ? ' untuk petugas ini' : '' ?>.
                         </div>
                     <?php else : ?>
+                    <?php if ($boleh_ubah_metode) : ?>
+                        <!--
+                            Form ubah metode massal. Form sengaja TIDAK membungkus tabel
+                            agar tombol DataTables (Excel/PDF) tidak ikut menjadi submit.
+                            Checkbox di tabel terhubung lewat atribut form="formMetode".
+                        -->
+                        <form id="formMetode" method="POST" action="aksi/aksi_metode_bayar.php"
+                              class="d-flex flex-wrap gap-2 align-items-center bg-light border rounded-2 px-3 py-2 mb-3">
+                            <?= kbap_csrf_field() ?>
+                            <input type="hidden" name="id_odalan" value="<?= (int) $f_odalan ?>">
+                            <input type="hidden" name="dari" value="<?= $esc($f_dari) ?>">
+                            <input type="hidden" name="sampai" value="<?= $esc($f_sampai) ?>">
+                            <input type="hidden" name="petugas" value="<?= (int) $f_petugas ?>">
+
+                            <span class="small text-muted me-auto">
+                                <i class="bi bi-check2-square me-1"></i>
+                                Centang transaksi yang metodenya salah, lalu pilih metode baru dan klik <strong>Ubah Metode</strong>.
+                            </span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnPilihSemua">
+                                <i class="bi bi-check-all"></i> Pilih semua
+                            </button>
+                            <select name="metode_baru" id="metodeBaru" class="form-select form-select-sm" style="max-width:170px;">
+                                <option value="">-- pilih metode --</option>
+                                <option value="tunai">Tunai</option>
+                                <option value="transfer">Transfer</option>
+                                <option value="QRIS">QRIS</option>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-warning" id="btnUbahMetode" disabled>
+                                <i class="bi bi-arrow-repeat"></i> Ubah Metode
+                                <span class="badge bg-dark ms-1" id="jmlTerpilih">0</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnResetPilih">
+                                <i class="bi bi-x-circle"></i> Reset
+                            </button>
+                        </form>
+                    <?php endif; ?>
                     <div class="table-responsive">
                         <table id="example" class="table table-hover align-middle" style="width:100%">
                             <thead class="table-dark">
                                 <tr>
+                                    <?php if ($boleh_ubah_metode) : ?>
+                                        <th class="text-center" style="width:38px;" data-orderable="false" data-priority="1" title="Pilih transaksi">&nbsp;</th>
+                                    <?php endif; ?>
                                     <th>ID</th>
                                     <th>ID Semeton</th>
                                     <th>Nama</th>
@@ -456,6 +499,14 @@ $judul_periode = ($f_dari === $f_sampai)
                                     }
                                     ?>
                                     <tr>
+                                        <?php if ($boleh_ubah_metode) : ?>
+                                            <td class="text-center">
+                                                <input type="checkbox" class="form-check-input cek-bayar"
+                                                       form="formMetode" name="id_pembayaran[]"
+                                                       value="<?= (int) $row['id_pembayaran'] ?>"
+                                                       aria-label="Pilih pembayaran #<?= (int) $row['id_pembayaran'] ?>">
+                                            </td>
+                                        <?php endif; ?>
                                         <td class="text-muted small">#<?= (int) $row['id_pembayaran'] ?></td>
                                         <td><span class="badge bg-light text-dark border"><?= $esc($row['user_id']) ?></span></td>
                                         <td class="fw-bold text-dark"><?= $esc($row['nama']) ?></td>
@@ -486,6 +537,97 @@ $judul_periode = ($f_dari === $f_sampai)
                     <?php endif; ?>
                 </div>
             </div>
+
+            <?php if ($boleh_ubah_metode && !empty($data_rows)) : ?>
+            <script>
+                (function () {
+                    var form = document.getElementById('formMetode');
+                    if (!form) { return; }
+
+                    var btnSemua = document.getElementById('btnPilihSemua');
+                    var btnUbah  = document.getElementById('btnUbahMetode');
+                    var btnReset = document.getElementById('btnResetPilih');
+                    var metode   = document.getElementById('metodeBaru');
+                    var label    = document.getElementById('jmlTerpilih');
+
+                    // Hanya checkbox pada baris data (bukan salinan "child row" DataTables Responsive).
+                    function daftar() {
+                        return Array.prototype.slice
+                            .call(document.querySelectorAll('input.cek-bayar'))
+                            .filter(function (c) {
+                                var tr = c.closest('tr');
+                                return tr && !tr.classList.contains('child');
+                            });
+                    }
+
+                    function segarkan() {
+                        var semua = daftar();
+                        var n = semua.filter(function (c) { return c.checked; }).length;
+                        if (label) { label.textContent = n; }
+                        if (btnUbah) { btnUbah.disabled = (n === 0 || !metode || metode.value === ''); }
+                        if (btnSemua) {
+                            btnSemua.disabled = semua.length === 0;
+                            btnSemua.innerHTML = (n > 0 && n === semua.length)
+                                ? '<i class="bi bi-x-square"></i> Batal pilih'
+                                : '<i class="bi bi-check-all"></i> Pilih semua';
+                        }
+                    }
+
+                    // Delegasi: aman walau DataTables memindahkan/menyusun ulang baris.
+                    document.addEventListener('change', function (e) {
+                        var t = e.target;
+                        if (!t) { return; }
+                        if (t.classList && t.classList.contains('cek-bayar')) { segarkan(); }
+                        if (t === metode) { segarkan(); }
+                    });
+
+                    if (btnSemua) {
+                        btnSemua.addEventListener('click', function () {
+                            var semua = daftar();
+                            var semuaTerpilih = semua.length > 0 && semua.every(function (c) { return c.checked; });
+                            semua.forEach(function (c) { c.checked = !semuaTerpilih; });
+                            segarkan();
+                        });
+                    }
+
+                    if (btnReset) {
+                        btnReset.addEventListener('click', function () {
+                            daftar().forEach(function (c) { c.checked = false; });
+                            if (metode) { metode.value = ''; }
+                            segarkan();
+                        });
+                    }
+
+                    form.addEventListener('submit', function (e) {
+                        var n = daftar().filter(function (c) { return c.checked; }).length;
+                        if (n === 0 || !metode || metode.value === '' || btnUbah.dataset.proses === '1') {
+                            e.preventDefault();
+                            return;
+                        }
+                        btnUbah.dataset.proses = '1';
+                        btnUbah.disabled = true;
+                        btnUbah.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
+                    });
+
+                    // DataTables menyembunyikan baris saat pencarian; hitungan ikut menyesuaikan.
+                    if (window.jQuery) {
+                        window.jQuery(document).on('draw.dt search.dt', function () {
+                            window.setTimeout(segarkan, 0);
+                        });
+                    }
+
+                    // Tombol kembali aktif lagi bila halaman dipulihkan dari cache (tombol Back).
+                    window.addEventListener('pageshow', function () {
+                        if (btnUbah) {
+                            btnUbah.dataset.proses = '';
+                            segarkan();
+                        }
+                    });
+
+                    segarkan();
+                })();
+            </script>
+            <?php endif; ?>
 
             <p class="text-muted small mt-3 mb-0">
                 <i class="bi bi-info-circle"></i>

@@ -558,6 +558,25 @@ date_default_timezone_set('Asia/Makassar');
                 confirmButtonText: 'OK'
             });
         </script>
+    <?php elseif (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'metode'): ?>
+        <?php $jumlah_ubah_metode = (isset($_GET['ubah']) && is_scalar($_GET['ubah'])) ? (int) $_GET['ubah'] : 0; ?>
+        <script>
+            Swal.fire({
+                title: 'Berhasil!',
+                text: 'Metode pembayaran <?= $jumlah_ubah_metode > 0 ? $jumlah_ubah_metode . ' transaksi' : '' ?> berhasil diubah.',
+                icon: 'success',
+                confirmButtonText: 'OK'
+            });
+        </script>
+    <?php elseif (isset($_GET['pesan']) && is_string($_GET['pesan']) && $_GET['pesan'] === 'metode_gagal'): ?>
+        <script>
+            Swal.fire({
+                title: 'Tidak Ada Perubahan',
+                html: "Metode pembayaran tidak diubah.<br>Pastikan transaksi yang dipilih masih aktif dan metodenya berbeda dari yang baru.",
+                icon: 'warning',
+                confirmButtonText: 'OK'
+            });
+        </script>
     <?php endif; ?>
 
     <script>
