@@ -264,6 +264,59 @@ if ($f_detail) {
     }
 }
 
+// ---------------------------------------------------------------------
+// 9. Semeton baru terdaftar pada periode kas (semeton.created_at)
+//    Dipakai agar anggota baru tetap terpantau pada laporan odalan,
+//    lengkap dengan wilayah dan jenis keanggotaan (ngarep/ngempi).
+//    Catatan: 601 baris lama memiliki created_at = '0000-00-00 00:00:00'
+//    (data warisan), sehingga hanya anggota baru yang punya tanggal.
+// ---------------------------------------------------------------------
+$baris_semeton_baru = [];
+$sql = 'SELECT s.user_id, s.nama, s.jenis_user, s.created_at,
+               w.nama_wilayah, sw.nama_sub
+        FROM semeton s
+        LEFT JOIN wilayah w ON w.id_wilayah = s.wilayah
+        LEFT JOIN sub_wilayah sw ON sw.id_sub = s.sub_wilayah
+        WHERE DATE(s.created_at) BETWEEN ? AND ?
+        ORDER BY s.created_at ASC, s.user_id ASC';
+if ($stmt = $koneksi->prepare($sql)) {
+    $stmt->bind_param('ss', $f_dari, $f_sampai);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($r = $res->fetch_assoc()) {
+        $baris_semeton_baru[] = $r;
+    }
+    $stmt->close();
+}
+
+$jml_baru         = count($baris_semeton_baru);
+$jml_baru_ngarep  = 0;
+$jml_baru_ngempi  = 0;
+foreach ($baris_semeton_baru as $sb) {
+    $jenis_sb = strtolower(trim((string) $sb['jenis_user']));
+    if ($jenis_sb === 'ngarep') {
+        $jml_baru_ngarep++;
+    } elseif ($jenis_sb === 'ngempi') {
+        $jml_baru_ngempi++;
+    }
+}
+$jml_baru_lain = $jml_baru - $jml_baru_ngarep - $jml_baru_ngempi;
+
+// Label jenis keanggotaan semeton (badge)
+$label_jenis_semeton = static function (string $jenis): array {
+    $j = strtolower(trim($jenis));
+    if ($j === 'ngarep') {
+        return ['Ngarep', 'jenis-ngarep'];
+    }
+    if ($j === 'ngempi') {
+        return ['Ngempi', 'jenis-ngempi'];
+    }
+    if ($j === 'pemangku') {
+        return ['Pemangku', 'jenis-netral'];
+    }
+    return [$j !== '' ? ucfirst($j) : '-', 'jenis-netral'];
+};
+
 // Label jenis pembayaran berdasarkan odalan acara
 $jenis_pembayaran = static function (int $id_od) use ($f_odalan): array {
     if ($f_odalan > 0 && $id_od === $f_odalan) {
@@ -633,6 +686,16 @@ $url_kembali = '../index.php?' . http_build_query([
             color: #41464b;
         }
 
+        .jenis-ngarep {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .jenis-ngempi {
+            background: #cff4fc;
+            color: #055160;
+        }
+
         .kosong {
             border: 1px dashed #9aa4b2;
             background: #f8f9fa;
@@ -993,9 +1056,61 @@ $url_kembali = '../index.php?' . http_build_query([
             </table>
         <?php endif; ?>
 
-        <!-- ---------- D. Rincian transaksi (opsional) ---------- -->
+        <!-- ---------- D. Semeton baru terdaftar ---------- -->
+        <h2 class="section">D. Semeton Baru Terdaftar pada Periode Ini</h2>
+        <?php if ($jml_baru === 0) : ?>
+            <p class="kosong">
+                Tidak ada semeton baru yang terdaftar pada periode ini.
+                Data anggota lama tidak memiliki tanggal daftar (<em>created_at</em>), sehingga tidak
+                dapat ditampilkan pada bagian ini.
+            </p>
+        <?php else : ?>
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th class="ctr" style="width:5%;">No</th>
+                        <th style="width:12%;">User ID</th>
+                        <th style="width:27%;">Nama Semeton</th>
+                        <th style="width:24%;">Wilayah / Sub</th>
+                        <th class="ctr" style="width:13%;">Jenis</th>
+                        <th class="ctr" style="width:13%;">Tgl Daftar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php $no = 1; foreach ($baris_semeton_baru as $sb) :
+                        [$label_jenis, $kelas_jenis] = $label_jenis_semeton((string) $sb['jenis_user']);
+                        ?>
+                        <tr>
+                            <td class="ctr"><?= $no++ ?></td>
+                            <td><?= $esc($sb['user_id']) ?></td>
+                            <td><?= $esc($sb['nama']) ?></td>
+                            <td>
+                                <?= $esc($sb['nama_wilayah'] !== null ? $sb['nama_wilayah'] : '-') ?>
+                                <?= $sb['nama_sub'] !== null ? ' / ' . $esc($sb['nama_sub']) : '' ?>
+                            </td>
+                            <td class="ctr"><span class="jenis <?= $esc($kelas_jenis) ?>"><?= $esc($label_jenis) ?></span></td>
+                            <td class="ctr"><?= $esc($tanggal_teks($sb['created_at'])) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5" class="num">
+                            TOTAL SEMETON BARU
+                            (Ngarep <?= number_format($jml_baru_ngarep, 0, ',', '.') ?>
+                            &middot; Ngempi <?= number_format($jml_baru_ngempi, 0, ',', '.') ?><?= $jml_baru_lain > 0
+                                ? ' &middot; Lainnya ' . number_format($jml_baru_lain, 0, ',', '.')
+                                : '' ?>)
+                        </td>
+                        <td class="ctr"><?= number_format($jml_baru, 0, ',', '.') ?></td>
+                    </tr>
+                </tfoot>
+            </table>
+        <?php endif; ?>
+
+        <!-- ---------- E. Rincian transaksi (opsional) ---------- -->
         <?php if ($f_detail) : ?>
-            <h2 class="section">D. Rincian Seluruh Transaksi pada Periode Ini</h2>
+            <h2 class="section">E. Rincian Seluruh Transaksi pada Periode Ini</h2>
             <?php if (empty($baris_detail)) : ?>
                 <p class="kosong">Tidak ada transaksi pada periode ini.</p>
             <?php else : ?>
@@ -1056,6 +1171,11 @@ $url_kembali = '../index.php?' . http_build_query([
             <br>
             <strong>Total Masuk</strong> = Odalan ini + Tunggakan + Bayar di muka.
             Periode kas pada laporan ini adalah <?= $esc($judul_periode) ?>.
+            <br>
+            <strong>Semeton baru</strong> = anggota pada tabel <em>semeton</em> yang tanggal
+            daftarnya (<em>created_at</em>) berada dalam periode kas ini, ditampilkan bersama
+            wilayah/sub wilayah dan jenis keanggotaannya (Ngarep/Ngempi). Anggota lama yang
+            tanggal daftarnya belum tercatat (nilai nol) tidak dapat ditampilkan pada bagian D.
         </div>
 
         <table class="ttd">
