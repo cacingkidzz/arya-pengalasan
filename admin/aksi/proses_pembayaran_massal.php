@@ -26,7 +26,8 @@ kbap_guard(['admin', 'bendahara']);
 
 /**
  * Kembali ke halaman kasir massal dengan pesan gagal.
- * Filter odalan/wilayah dipertahankan agar petugas tidak kehilangan konteks.
+ * Filter odalan/wilayah/sub wilayah dipertahankan agar petugas tidak
+ * kehilangan konteks.
  */
 $gagal = static function (string $pesan): void {
     $params = ['menu' => 'pembayaran_massal', 'pesan' => 'bayar_massal_gagal'];
@@ -35,6 +36,9 @@ $gagal = static function (string $pesan): void {
     }
     if (isset($_POST['wilayah']) && is_scalar($_POST['wilayah'])) {
         $params['wilayah'] = (int) $_POST['wilayah'];
+    }
+    if (isset($_POST['sub']) && is_scalar($_POST['sub'])) {
+        $params['sub'] = (int) $_POST['sub'];
     }
     $params['info'] = mb_substr(trim($pesan), 0, 300);
     header('Location: ../index.php?' . http_build_query($params));
@@ -51,6 +55,9 @@ $id_piodalan = (isset($_POST['id_piodalan']) && is_scalar($_POST['id_piodalan'])
     : 0;
 $f_wilayah   = (isset($_POST['wilayah']) && is_scalar($_POST['wilayah']))
     ? (int) $_POST['wilayah']
+    : 0;
+$f_sub       = (isset($_POST['sub']) && is_scalar($_POST['sub']))
+    ? (int) $_POST['sub']
     : 0;
 $tgl_bayar   = (isset($_POST['tgl_bayar']) && is_scalar($_POST['tgl_bayar']))
     ? trim((string) $_POST['tgl_bayar'])
@@ -107,6 +114,24 @@ $stmt->close();
 
 if (!$odalan) {
     $gagal('Odalan tidak ditemukan.');
+}
+
+// Sub wilayah hanya dipakai untuk konteks & jejak audit: pastikan benar-benar
+// milik wilayah yang dipilih. Nilai tidak cocok diabaikan (daftar id semeton
+// tetap yang menentukan pembayaran, bukan filter ini).
+if ($f_sub > 0) {
+    if ($f_wilayah <= 0) {
+        $f_sub = 0;
+    } else {
+        $stmt = $koneksi->prepare('SELECT id_sub FROM sub_wilayah WHERE id_sub = ? AND id_wilayah = ? LIMIT 1');
+        $stmt->bind_param('ii', $f_sub, $f_wilayah);
+        $stmt->execute();
+        $sub_ada = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$sub_ada) {
+            $f_sub = 0;
+        }
+    }
 }
 
 $berhasil        = [];
@@ -208,6 +233,7 @@ try {
             'metode'        => $metode,
             'tanggal_bayar' => $tgl_bayar,
             'id_wilayah'    => $f_wilayah > 0 ? $f_wilayah : null,
+            'id_sub'        => $f_sub > 0 ? $f_sub : null,
         ], 'Pembayaran urunan (massal)');
 
         $berhasil[]     = $id_semeton;
@@ -251,6 +277,9 @@ if ($id_piodalan > 0) {
 }
 if ($f_wilayah > 0) {
     $params['wilayah'] = $f_wilayah;
+}
+if ($f_sub > 0) {
+    $params['sub'] = $f_sub;
 }
 
 header('Location: ../index.php?' . http_build_query($params));

@@ -43,6 +43,14 @@ if ($res = mysqli_query($koneksi, "SELECT id_wilayah, nama_wilayah FROM wilayah 
     }
 }
 
+// Sub wilayah dipakai untuk mempersempit daftar (mis. satu banjar/dusun).
+$sub_list = [];
+if ($res = mysqli_query($koneksi, "SELECT id_sub, id_wilayah, nama_sub FROM sub_wilayah ORDER BY nama_sub ASC")) {
+    while ($r = mysqli_fetch_assoc($res)) {
+        $sub_list[] = $r;
+    }
+}
+
 // ---------------------------------------------------------------------
 // Filter
 // ---------------------------------------------------------------------
@@ -57,6 +65,21 @@ $f_wilayah = (isset($_GET['wilayah']) && is_scalar($_GET['wilayah'])) ? (int) $_
 $id_wilayah_sah = array_map('intval', array_column($wilayah_list, 'id_wilayah'));
 if ($f_wilayah > 0 && !in_array($f_wilayah, $id_wilayah_sah, true)) {
     $f_wilayah = 0;
+}
+
+// Sub wilayah harus benar-benar milik wilayah yang dipilih.
+$f_sub = (isset($_GET['sub']) && is_scalar($_GET['sub'])) ? (int) $_GET['sub'] : 0;
+if ($f_sub > 0) {
+    $sub_cocok = false;
+    foreach ($sub_list as $sw) {
+        if ((int) $sw['id_sub'] === $f_sub) {
+            $sub_cocok = ((int) $sw['id_wilayah'] === $f_wilayah);
+            break;
+        }
+    }
+    if (!$sub_cocok) {
+        $f_sub = 0;
+    }
 }
 
 $f_q = (isset($_GET['q']) && is_string($_GET['q'])) ? trim($_GET['q']) : '';
@@ -80,6 +103,23 @@ foreach ($wilayah_list as $w) {
     }
 }
 
+$sub_aktif         = null;
+$sub_untuk_wilayah = [];
+$sub_json          = [];
+foreach ($sub_list as $sw) {
+    if ((int) $sw['id_wilayah'] === $f_wilayah) {
+        $sub_untuk_wilayah[] = $sw;
+    }
+    if ($f_sub > 0 && (int) $sw['id_sub'] === $f_sub) {
+        $sub_aktif = $sw;
+    }
+    // Data untuk mengisi dropdown sub wilayah di sisi klien (tanpa reload).
+    $sub_json[(int) $sw['id_wilayah']][] = [
+        'id'   => (int) $sw['id_sub'],
+        'nama' => (string) $sw['nama_sub'],
+    ];
+}
+
 // ---------------------------------------------------------------------
 // Statistik (wilayah + odalan; tidak terpengaruh pencarian/opsi tampil)
 // ---------------------------------------------------------------------
@@ -100,8 +140,15 @@ if ($f_wilayah > 0 && $f_odalan > 0) {
                  FROM semeton s
                  JOIN hutang h ON h.id_semeton = s.id AND h.id_odalan = ?
                  WHERE s.wilayah = ?";
+    $tipe_stat  = 'ii';
+    $nilai_stat = [$f_odalan, $f_wilayah];
+    if ($f_sub > 0) {
+        $sql_stat   .= ' AND s.sub_wilayah = ?';
+        $tipe_stat  .= 'i';
+        $nilai_stat[] = $f_sub;
+    }
     if ($stmt = $koneksi->prepare($sql_stat)) {
-        $stmt->bind_param('ii', $f_odalan, $f_wilayah);
+        $stmt->bind_param($tipe_stat, ...$nilai_stat);
         $stmt->execute();
         if ($row = $stmt->get_result()->fetch_assoc()) {
             $stat['jml']     = (int) $row['jml'];
@@ -132,6 +179,12 @@ if ($f_wilayah > 0 && $f_odalan > 0) {
             WHERE s.wilayah = ?";
     $tipe  = 'ii';
     $nilai = [$f_odalan, $f_wilayah];
+
+    if ($f_sub > 0) {
+        $sql    .= ' AND s.sub_wilayah = ?';
+        $tipe   .= 'i';
+        $nilai[] = $f_sub;
+    }
 
     if ($f_q !== '') {
         $sql    .= ' AND (s.nama LIKE ? OR s.user_id LIKE ?)';
@@ -188,7 +241,7 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                     <form method="GET" action="index.php" class="row g-2 align-items-end">
                         <input type="hidden" name="menu" value="pembayaran_massal">
 
-                        <div class="col-12 col-lg-4">
+                        <div class="col-12 col-lg-3">
                             <label class="form-label small text-muted mb-1" for="f-odalan">Odalan</label>
                             <select id="f-odalan" name="id_odalan" class="form-select">
                                 <?php foreach ($odalan_list as $o) : ?>
@@ -200,7 +253,7 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                             </select>
                         </div>
 
-                        <div class="col-12 col-lg-3">
+                        <div class="col-6 col-lg-2">
                             <label class="form-label small text-muted mb-1" for="f-wilayah">Wilayah</label>
                             <select id="f-wilayah" name="wilayah" class="form-select" required>
                                 <option value="">&mdash; Pilih wilayah &mdash;</option>
@@ -213,6 +266,20 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                         </div>
 
                         <div class="col-6 col-lg-2">
+                            <label class="form-label small text-muted mb-1" for="f-sub">Sub Wilayah</label>
+                            <select id="f-sub" name="sub" class="form-select" <?= $f_wilayah > 0 ? '' : 'disabled' ?>>
+                                <option value="">
+                                    <?= $f_wilayah > 0 ? '&mdash; Semua sub wilayah &mdash;' : '&mdash; Pilih wilayah dulu &mdash;' ?>
+                                </option>
+                                <?php foreach ($sub_untuk_wilayah as $sw) : ?>
+                                    <option value="<?= (int) $sw['id_sub'] ?>" <?= $f_sub === (int) $sw['id_sub'] ? 'selected' : '' ?>>
+                                        <?= $esc($sw['nama_sub']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-lg-3">
                             <label class="form-label small text-muted mb-1" for="f-q">Cari</label>
                             <input type="search" id="f-q" name="q" class="form-control"
                                 value="<?= $esc($f_q) ?>" placeholder="Nama / ID">
@@ -230,7 +297,7 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-1"></i> Tampilkan
                             </button>
-                            <?php if ($f_wilayah > 0 || $f_q !== '' || $f_tampil !== 'belum') : ?>
+                            <?php if ($f_wilayah > 0 || $f_sub > 0 || $f_q !== '' || $f_tampil !== 'belum') : ?>
                                 <a href="<?= $esc($url_reset) ?>" class="btn btn-outline-secondary">
                                     <i class="fas fa-rotate-left me-1"></i> Reset
                                 </a>
@@ -294,7 +361,8 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                         <div>
                             Tidak ada tagihan yang cocok.
                             <?php if ($f_tampil === 'belum' && $stat['belum'] === 0) : ?>
-                                Semua anggota di wilayah <strong><?= $esc($wilayah_aktif['nama_wilayah']) ?></strong>
+                                Semua anggota <?= $sub_aktif ? 'sub wilayah' : 'wilayah' ?>
+                                <strong><?= $esc($sub_aktif ? $sub_aktif['nama_sub'] : $wilayah_aktif['nama_wilayah']) ?></strong>
                                 sudah lunas untuk odalan ini.
                             <?php else : ?>
                                 Coba ubah kata kunci pencarian atau pilih "Semua (termasuk lunas)".
@@ -308,6 +376,7 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                         <?= kbap_csrf_field() ?>
                         <input type="hidden" name="id_piodalan" value="<?= (int) $f_odalan ?>">
                         <input type="hidden" name="wilayah" value="<?= (int) $f_wilayah ?>">
+                        <input type="hidden" name="sub" value="<?= (int) $f_sub ?>">
 
                         <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
                             <div class="card-header bg-white py-3">
@@ -412,6 +481,9 @@ $url_reset = 'index.php?menu=pembayaran_massal';
                                 <div class="small text-muted">
                                     Odalan <strong><?= $esc($odalan_aktif['nama_odalan']) ?></strong>
                                     &middot; Wilayah <strong><?= $esc($wilayah_aktif['nama_wilayah']) ?></strong>
+                                    <?php if ($sub_aktif) : ?>
+                                        &middot; Sub <strong><?= $esc($sub_aktif['nama_sub']) ?></strong>
+                                    <?php endif; ?>
                                     &middot; <?= number_format(count($data_rows), 0, ',', '.') ?> baris tampil
                                 </div>
                                 <button type="submit" class="btn btn-success px-4" id="btnMassal" disabled>
@@ -428,6 +500,43 @@ $url_reset = 'index.php?menu=pembayaran_massal';
         </div>
     </div>
 </main>
+
+<script>
+    // Isi dropdown sub wilayah mengikuti wilayah terpilih, tanpa reload.
+    (function() {
+        var data    = <?= json_encode($sub_json, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        var wilayah = document.getElementById('f-wilayah');
+        var sub     = document.getElementById('f-sub');
+        if (!wilayah || !sub) return;
+
+        function isi(pertahankan) {
+            var idWilayah = wilayah.value;
+            var lama = pertahankan ? sub.value : '';
+
+            sub.innerHTML = '';
+            var kosong = document.createElement('option');
+            kosong.value = '';
+            kosong.textContent = idWilayah ? '\u2014 Semua sub wilayah \u2014' : '\u2014 Pilih wilayah dulu \u2014';
+            sub.appendChild(kosong);
+
+            if (idWilayah && data[idWilayah]) {
+                data[idWilayah].forEach(function(s) {
+                    var o = document.createElement('option');
+                    o.value = s.id;
+                    o.textContent = s.nama;
+                    if (pertahankan && String(s.id) === String(lama)) {
+                        o.selected = true;
+                    }
+                    sub.appendChild(o);
+                });
+            }
+            sub.disabled = !idWilayah;
+        }
+
+        wilayah.addEventListener('change', function() { isi(false); });
+        isi(true);
+    })();
+</script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
