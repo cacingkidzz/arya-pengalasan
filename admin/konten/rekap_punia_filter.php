@@ -65,6 +65,30 @@ if ($f_odalan > 0) {
     }
 }
 
+// 3b. Total per metode pembayaran (2026-11-28) — satu query agregat,
+// dihitung di SQL agar angkanya konsisten dengan total keseluruhan.
+$metode_rows   = [];
+$total_donasi  = count($data_rows);
+if ($f_odalan > 0) {
+    if ($stmt = $koneksi->prepare('SELECT metode_pembayaran, COUNT(*) AS jml, SUM(jumlah_punia) AS total
+                                   FROM dana_punia WHERE id_piodalan = ?
+                                   GROUP BY metode_pembayaran
+                                   ORDER BY total DESC')) {
+        $stmt->bind_param('i', $f_odalan);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        while ($r = $res->fetch_assoc()) {
+            $metode_rows[] = $r;
+        }
+        $stmt->close();
+    }
+}
+// Warna badge metode (sama dengan badge di tabel rincian).
+$warna_metode = static function (string $m): string {
+    $m = strtolower($m);
+    return $m === 'tunai' ? 'warning' : ($m === 'qris' ? 'primary' : 'info text-white');
+};
+
 $boleh_ekspor = in_array(kbap_role(), ['admin', 'bendahara'], true);
 $url_csv = 'aksi/export_csv.php?' . http_build_query([
     'jenis'       => 'punia',
@@ -137,6 +161,73 @@ $url_csv = 'aksi/export_csv.php?' . http_build_query([
                 </div>
             </div>
 
+            <?php if (!empty($metode_rows)) : ?>
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 pt-3 pb-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <h6 class="mb-0 fw-bold text-dark">
+                            <i class="bi bi-wallet2 me-1 text-success"></i> Total per Metode Pembayaran
+                        </h6>
+                        <span class="badge bg-light text-dark border">
+                            <?= number_format(count($metode_rows), 0, ',', '.') ?> metode &middot;
+                            <?= number_format($total_donasi, 0, ',', '.') ?> donasi
+                        </span>
+                    </div>
+                    <div class="table-responsive">
+                        <table id="tabelMetodePunia" class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4" style="width: 160px;">Metode</th>
+                                    <th class="text-center" style="width: 140px;">Jumlah Donasi</th>
+                                    <th class="text-end" style="width: 200px;">Nominal</th>
+                                    <th class="pe-4">Porsi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($metode_rows as $mr) : ?>
+                                    <?php
+                                    $m_nom   = (float) $mr['total'];
+                                    $m_pct   = $total_akhir > 0 ? ($m_nom / $total_akhir * 100) : 0;
+                                    $m_label = (string) $mr['metode_pembayaran'];
+                                    ?>
+                                    <tr>
+                                        <td class="ps-4">
+                                            <span class="badge bg-<?= $warna_metode($m_label) ?> rounded-pill text-uppercase" style="font-size: 0.7rem;">
+                                                <?= $esc($m_label) ?>
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="fw-semibold"><?= number_format((int) $mr['jml'], 0, ',', '.') ?></span>
+                                        </td>
+                                        <td class="text-end fw-bold text-success"><?= $rupiah($m_nom) ?></td>
+                                        <td class="pe-4">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress flex-grow-1" style="height: 8px;">
+                                                    <div class="progress-bar bg-success" role="progressbar"
+                                                        style="width: <?= number_format($m_pct, 1, '.', '') ?>%;"
+                                                        aria-valuenow="<?= number_format($m_pct, 1, '.', '') ?>"
+                                                        aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <span class="small text-muted" style="min-width: 52px; text-align: right;">
+                                                    <?= number_format($m_pct, 1, ',', '.') ?>%
+                                                </span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td class="ps-4">TOTAL</td>
+                                    <td class="text-center"><?= number_format($total_donasi, 0, ',', '.') ?></td>
+                                    <td class="text-end"><?= $rupiah($total_akhir) ?></td>
+                                    <td class="pe-4">100%</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="card border-0 shadow-sm">
                 <div class="table-responsive">
                     <table id="tabelPunia" class="table table-hover align-middle mb-0">
@@ -160,7 +251,6 @@ $url_csv = 'aksi/export_csv.php?' . http_build_query([
                             <?php else : ?>
                                 <?php $i = 1; ?>
                                 <?php foreach ($data_rows as $row) : ?>
-                                    <?php $m = strtolower((string) $row['metode_pembayaran']); ?>
                                     <tr>
                                         <td class="ps-4 text-muted"><?= $i++ ?></td>
                                         <td>
@@ -174,8 +264,7 @@ $url_csv = 'aksi/export_csv.php?' . http_build_query([
                                             <div class="small text-muted fst-italic"><?= $esc($row['keterangan'] !== null && trim((string) $row['keterangan']) !== '' ? $row['keterangan'] : '-') ?></div>
                                         </td>
                                         <td class="text-center">
-                                            <?php $color = ($m === 'tunai') ? 'warning' : (($m === 'qris') ? 'primary' : 'info text-white'); ?>
-                                            <span class="badge bg-<?= $color ?> rounded-pill text-uppercase" style="font-size: 0.65rem;">
+                                            <span class="badge bg-<?= $warna_metode((string) $row['metode_pembayaran']) ?> rounded-pill text-uppercase" style="font-size: 0.65rem;">
                                                 <?= $esc($row['metode_pembayaran']) ?>
                                             </span>
                                         </td>
