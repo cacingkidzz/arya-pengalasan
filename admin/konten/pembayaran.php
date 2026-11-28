@@ -117,6 +117,36 @@ require_once __DIR__ . '/../koneksi.php';
         $f_status = '';
     }
 
+    // --- Sorting (2026-11-28) ---
+    // `urut` di-whitelist agar tidak bisa menyisipkan SQL. Default `id`
+    // mempertahankan perilaku lama (ORDER BY x.user_id ASC).
+    $f_urut = (isset($_GET['urut']) && is_string($_GET['urut'])) ? $_GET['urut'] : 'id';
+    $daftar_urut = [
+        'id'           => 'ID Anggota (A-Z)',
+        'nama'         => 'Nama (A-Z)',
+        'sub_asc'      => 'Sub Wilayah (A-Z)',
+        'sub_desc'     => 'Sub Wilayah (Z-A)',
+        'wilayah_asc'  => 'Wilayah (A-Z)',
+        'wilayah_desc' => 'Wilayah (Z-A)',
+        'hutang_desc'  => 'Hutang Terbesar',
+    ];
+    if (!isset($daftar_urut[$f_urut])) {
+        $f_urut = 'id';
+    }
+
+    // Ekspresi ORDER BY per pilihan. Sub/wilayah kosong selalu di akhir,
+    // dan x.user_id dipakai sebagai tiebreaker agar paging deterministik.
+    $order_map = [
+        'id'           => 'x.user_id ASC',
+        'nama'         => 'x.nama ASC, x.user_id ASC',
+        'sub_asc'      => "(x.nama_sub IS NULL OR x.nama_sub = '') ASC, x.nama_sub ASC, x.user_id ASC",
+        'sub_desc'     => "(x.nama_sub IS NULL OR x.nama_sub = '') ASC, x.nama_sub DESC, x.user_id ASC",
+        'wilayah_asc'  => "(x.nama_wilayah IS NULL OR x.nama_wilayah = '') ASC, x.nama_wilayah ASC, (x.nama_sub IS NULL OR x.nama_sub = '') ASC, x.nama_sub ASC, x.user_id ASC",
+        'wilayah_desc' => "(x.nama_wilayah IS NULL OR x.nama_wilayah = '') ASC, x.nama_wilayah DESC, (x.nama_sub IS NULL OR x.nama_sub = '') ASC, x.nama_sub ASC, x.user_id ASC",
+        'hutang_desc'  => 'x.total_hutang DESC, x.user_id ASC',
+    ];
+    $order_sql = $order_map[$f_urut];
+
     $per = (isset($_GET['per']) && is_scalar($_GET['per'])) ? (int) $_GET['per'] : 50;
     if (!in_array($per, [0, 25, 50, 100, 250], true)) {
         $per = 50;
@@ -201,7 +231,7 @@ require_once __DIR__ . '/../koneksi.php';
     if ($f_status !== '') {
         $sql .= " WHERE x.status = ?";
     }
-    $sql .= " ORDER BY x.user_id ASC";
+    $sql .= " ORDER BY " . $order_sql;
     if ($per > 0) {
         $sql .= " LIMIT ? OFFSET ?";
     }
@@ -236,11 +266,23 @@ require_once __DIR__ . '/../koneksi.php';
     if ($f_status !== '') {
         $param_dasar['status'] = $f_status;
     }
+    if ($f_urut !== 'id') {
+        $param_dasar['urut'] = $f_urut;
+    }
     if ($per !== 50) {
         $param_dasar['per'] = $per;
     }
     $url_hal = static function (int $h) use ($param_dasar): string {
         return 'index.php?' . http_build_query(array_merge($param_dasar, ['hal' => $h]));
+    };
+    // Tautan sorting header: mempertahankan filter, mengembalikan ke halaman 1.
+    $url_urut = static function (string $u) use ($param_dasar): string {
+        $p = $param_dasar;
+        unset($p['urut']);
+        if ($u !== 'id') {
+            $p['urut'] = $u;
+        }
+        return 'index.php?' . http_build_query($p);
     };
     $url_reset = 'index.php?menu=pembayaran';
 
@@ -314,11 +356,11 @@ require_once __DIR__ . '/../koneksi.php';
                 <div class="card-body py-3">
                     <form method="GET" action="index.php" class="row g-2 align-items-end">
                         <input type="hidden" name="menu" value="pembayaran">
-                        <div class="col-12 col-lg-4">
+                        <div class="col-12 col-lg-3">
                             <label class="form-label small text-muted mb-1" for="filter-q">Cari semeton</label>
-                            <input type="search" id="filter-q" name="q" class="form-control" value="<?= $esc($f_q) ?>" placeholder="Nama atau ID anggota (APPxxxxx)">
+                            <input type="search" id="filter-q" name="q" class="form-control" value="<?= $esc($f_q) ?>" placeholder="Nama / ID / No. HP">
                         </div>
-                        <div class="col-6 col-lg-3">
+                        <div class="col-6 col-lg-2">
                             <label class="form-label small text-muted mb-1" for="filter-wilayah">Wilayah</label>
                             <select id="filter-wilayah" name="wilayah" class="form-select">
                                 <option value="">Semua wilayah</option>
@@ -336,6 +378,14 @@ require_once __DIR__ . '/../koneksi.php';
                             </select>
                         </div>
                         <div class="col-6 col-lg-2">
+                            <label class="form-label small text-muted mb-1" for="filter-urut">Urutkan</label>
+                            <select id="filter-urut" name="urut" class="form-select">
+                                <?php foreach ($daftar_urut as $nilai_urut => $label_urut) : ?>
+                                    <option value="<?= $esc($nilai_urut) ?>" <?= $f_urut === $nilai_urut ? 'selected' : '' ?>><?= $esc($label_urut) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-6 col-lg-2">
                             <label class="form-label small text-muted mb-1" for="filter-per">Baris/halaman</label>
                             <select id="filter-per" name="per" class="form-select">
                                 <?php foreach ([25 => '25 baris', 50 => '50 baris', 100 => '100 baris', 250 => '250 baris', 0 => 'Semua'] as $nilai_per => $label_per) : ?>
@@ -347,7 +397,7 @@ require_once __DIR__ . '/../koneksi.php';
                             <button type="submit" class="btn btn-primary flex-fill" title="Terapkan filter">
                                 <i class="fas fa-search"></i>
                             </button>
-                            <?php if ($f_q !== '' || $f_wilayah > 0 || $f_status !== '' || $per !== 50) : ?>
+                            <?php if ($f_q !== '' || $f_wilayah > 0 || $f_status !== '' || $per !== 50 || $f_urut !== 'id') : ?>
                                 <a href="<?= $esc($url_reset) ?>" class="btn btn-outline-secondary" title="Reset filter">
                                     <i class="fas fa-rotate-left"></i>
                                 </a>
@@ -364,8 +414,32 @@ require_once __DIR__ . '/../koneksi.php';
                             <tr>
                                 <th>ID</th>
                                 <th>Nama Lengkap</th>
-                                <th>Wilayah</th>
-                                <th>Sub Wilayah</th>
+                                <th>
+                                    <?php $urut_w = ($f_urut === 'wilayah_desc') ? 'wilayah_asc' : 'wilayah_desc'; ?>
+                                    <a href="<?= $esc($url_urut($urut_w)) ?>" class="text-decoration-none text-reset" title="Urutkan wilayah">
+                                        Wilayah
+                                        <?php if ($f_urut === 'wilayah_asc') : ?>
+                                            <i class="fas fa-caret-up text-primary ms-1"></i>
+                                        <?php elseif ($f_urut === 'wilayah_desc') : ?>
+                                            <i class="fas fa-caret-down text-primary ms-1"></i>
+                                        <?php else : ?>
+                                            <i class="fas fa-sort text-muted ms-1" style="opacity:.5;"></i>
+                                        <?php endif; ?>
+                                    </a>
+                                </th>
+                                <th>
+                                    <?php $urut_s = ($f_urut === 'sub_desc') ? 'sub_asc' : 'sub_desc'; ?>
+                                    <a href="<?= $esc($url_urut($urut_s)) ?>" class="text-decoration-none text-reset" title="Urutkan sub wilayah">
+                                        Sub Wilayah
+                                        <?php if ($f_urut === 'sub_asc') : ?>
+                                            <i class="fas fa-caret-up text-primary ms-1"></i>
+                                        <?php elseif ($f_urut === 'sub_desc') : ?>
+                                            <i class="fas fa-caret-down text-primary ms-1"></i>
+                                        <?php else : ?>
+                                            <i class="fas fa-sort text-muted ms-1" style="opacity:.5;"></i>
+                                        <?php endif; ?>
+                                    </a>
+                                </th>
                                 <th>No. HP</th>
                                 <th>Jumlah Hutang</th>
                                 <th class="text-center">Status</th>
@@ -497,6 +571,7 @@ require_once __DIR__ . '/../koneksi.php';
                 <input type="hidden" name="q" value="<?= $esc($f_q) ?>">
                 <input type="hidden" name="wilayah" value="<?= (int) $f_wilayah ?>">
                 <input type="hidden" name="status" value="<?= $esc($f_status) ?>">
+                <input type="hidden" name="urut" value="<?= $esc($f_urut) ?>">
                 <input type="hidden" name="per" value="<?= (int) $per ?>">
                 <input type="hidden" name="hal" value="<?= (int) $hal ?>">
 

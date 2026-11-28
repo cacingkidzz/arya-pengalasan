@@ -46,6 +46,12 @@ if (!in_array($f_status, ['Lunas', 'Belum Lunas'], true)) {
     $f_status = '';
 }
 
+// Sorting halaman pembayaran (2026-11-28) — di-whitelist agar aman.
+$f_urut = $teks($_POST['urut'] ?? 'id');
+if (!in_array($f_urut, ['id', 'nama', 'sub_asc', 'sub_desc', 'wilayah_asc', 'wilayah_desc', 'hutang_desc'], true)) {
+    $f_urut = 'id';
+}
+
 $f_per = isset($_POST['per']) && is_scalar($_POST['per']) ? (int) $_POST['per'] : 50;
 if (!in_array($f_per, [0, 25, 50, 100, 250], true)) {
     $f_per = 50;
@@ -61,7 +67,7 @@ if ($f_hal < 1) {
  * - sumber=detail  -> kembali ke layar kasir semeton tersebut.
  * - sumber=pembayaran -> kembali ke daftar pembayaran dengan filter aktif.
  */
-$kembali = static function (string $pesan, string $user_id) use ($sumber, $f_q, $f_wilayah, $f_status, $f_per, $f_hal): void {
+$kembali = static function (string $pesan, string $user_id) use ($sumber, $f_q, $f_wilayah, $f_status, $f_urut, $f_per, $f_hal): void {
     // PENTING: halaman pembayaran memakai `status` untuk FILTER
     // (Lunas / Belum Lunas), jadi notifikasi dikirim lewat `pesan`
     // agar filter tidak tertimpa.
@@ -79,6 +85,9 @@ $kembali = static function (string $pesan, string $user_id) use ($sumber, $f_q, 
     }
     if ($f_status !== '') {
         $param['status'] = $f_status;
+    }
+    if ($f_urut !== 'id') {
+        $param['urut'] = $f_urut;
     }
     if ($f_per !== 50) {
         $param['per'] = $f_per;
