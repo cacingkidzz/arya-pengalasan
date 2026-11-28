@@ -273,6 +273,29 @@ switch ($jenis) {
             $tipe    .= 's';
             $nilai[]  = $f_metode;
         }
+        // Filter rentang tanggal (format Y-m-d yang sudah divalidasi di halaman utama)
+        $f_dari   = (isset($_GET['dari']) && is_scalar($_GET['dari'])) ? trim((string) $_GET['dari']) : '';
+        $f_sampai = (isset($_GET['sampai']) && is_scalar($_GET['sampai'])) ? trim((string) $_GET['sampai']) : '';
+        $tanggal_sah = static function (string $t): bool {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $t)) {
+                return false;
+            }
+            [$th, $bl, $tg] = array_map('intval', explode('-', $t));
+            return checkdate($bl, $tg, $th);
+        };
+        if ($f_dari !== '' && $tanggal_sah($f_dari)) {
+            $where[]  = 'd.tanggal_punia >= ?';
+            $tipe    .= 's';
+            $nilai[]  = $f_dari;
+        }
+        if ($f_sampai !== '' && $tanggal_sah($f_sampai)) {
+            $where[]  = 'd.tanggal_punia <= ?';
+            $tipe    .= 's';
+            $nilai[]  = $f_sampai;
+        }
+        if ($f_dari !== '' && $f_sampai !== '' && $f_dari > $f_sampai) {
+            $f_dari = $f_sampai = '';
+        }
 
         $sql = "SELECT d.*, o.nama_odalan
                 FROM dana_punia d

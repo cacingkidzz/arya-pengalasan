@@ -47,14 +47,48 @@ if (!array_key_exists($f_odalan, $odalan_list)) {
 }
 $judul_odalan = $f_odalan > 0 ? $odalan_list[$f_odalan] : 'Piodalan Tidak Ditemukan';
 
-// 3. Data + total di SQL
+// 2b. Rentang tanggal (format Y-m-d yang sah)
+$tanggal_sah = static function (string $t): bool {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $t)) {
+        return false;
+    }
+    [$th, $bl, $tg] = array_map('intval', explode('-', $t));
+    return checkdate($bl, $tg, $th);
+};
+$f_dari   = (isset($_GET['dari']) && is_scalar($_GET['dari'])) ? trim((string) $_GET['dari']) : '';
+$f_sampai = (isset($_GET['sampai']) && is_scalar($_GET['sampai'])) ? trim((string) $_GET['sampai']) : '';
+if ($f_dari !== '' && !$tanggal_sah($f_dari)) {
+    $f_dari = '';
+}
+if ($f_sampai !== '' && !$tanggal_sah($f_sampai)) {
+    $f_sampai = '';
+}
+if ($f_dari !== '' && $f_sampai !== '' && $f_dari > $f_sampai) {
+    [$f_dari, $f_sampai] = [$f_sampai, $f_dari];
+}
+
+// 3. Data + total di SQL (dengan filter tanggal)
 $data_rows = [];
 $total_akhir = 0.0;
 if ($f_odalan > 0) {
+    $where  = ['id_piodalan = ?'];
+    $tipe   = 'i';
+    $nilai  = [$f_odalan];
+    if ($f_dari !== '') {
+        $where[] = 'tanggal_punia >= ?';
+        $tipe   .= 's';
+        $nilai[] = $f_dari;
+    }
+    if ($f_sampai !== '') {
+        $where[] = 'tanggal_punia <= ?';
+        $tipe   .= 's';
+        $nilai[] = $f_sampai;
+    }
+    $where_sql = ' WHERE ' . implode(' AND ', $where);
     if ($stmt = $koneksi->prepare('SELECT id_punia, nama_donatur, alamat, jumlah_punia, keterangan, metode_pembayaran, tanggal_punia
-                                   FROM dana_punia WHERE id_piodalan = ?
+                                   FROM dana_punia' . $where_sql . '
                                    ORDER BY tanggal_punia DESC, id_punia DESC')) {
-        $stmt->bind_param('i', $f_odalan);
+        $stmt->bind_param($tipe, ...$nilai);
         $stmt->execute();
         $res = $stmt->get_result();
         while ($r = $res->fetch_assoc()) {
@@ -65,16 +99,29 @@ if ($f_odalan > 0) {
     }
 }
 
-// 3b. Total per metode pembayaran (2026-11-28) — satu query agregat,
-// dihitung di SQL agar angkanya konsisten dengan total keseluruhan.
+// 3b. Total per metode pembayaran — satu query agregat dengan filter tanggal
 $metode_rows   = [];
 $total_donasi  = count($data_rows);
 if ($f_odalan > 0) {
+    $where_m  = ['id_piodalan = ?'];
+    $tipe_m   = 'i';
+    $nilai_m  = [$f_odalan];
+    if ($f_dari !== '') {
+        $where_m[] = 'tanggal_punia >= ?';
+        $tipe_m   .= 's';
+        $nilai_m[] = $f_dari;
+    }
+    if ($f_sampai !== '') {
+        $where_m[] = 'tanggal_punia <= ?';
+        $tipe_m   .= 's';
+        $nilai_m[] = $f_sampai;
+    }
+    $where_sql_m = ' WHERE ' . implode(' AND ', $where_m);
     if ($stmt = $koneksi->prepare('SELECT metode_pembayaran, COUNT(*) AS jml, SUM(jumlah_punia) AS total
-                                   FROM dana_punia WHERE id_piodalan = ?
+                                   FROM dana_punia' . $where_sql_m . '
                                    GROUP BY metode_pembayaran
                                    ORDER BY total DESC')) {
-        $stmt->bind_param('i', $f_odalan);
+        $stmt->bind_param($tipe_m, ...$nilai_m);
         $stmt->execute();
         $res = $stmt->get_result();
         while ($r = $res->fetch_assoc()) {
@@ -90,11 +137,18 @@ $warna_metode = static function (string $m): string {
 };
 
 $boleh_ekspor = in_array(kbap_role(), ['admin', 'bendahara'], true);
-$url_csv = 'aksi/export_csv.php?' . http_build_query([
+$param_csv = [
     'jenis'       => 'punia',
     'id_piodalan' => $f_odalan,
     'csrf_token'  => kbap_csrf_token(),
-]);
+];
+if ($f_dari !== '') {
+    $param_csv['dari'] = $f_dari;
+}
+if ($f_sampai !== '') {
+    $param_csv['sampai'] = $f_sampai;
+}
+$url_csv = 'aksi/export_csv.php?' . http_build_query($param_csv);
 ?>
 
 <main class="app-main">
@@ -134,7 +188,7 @@ $url_csv = 'aksi/export_csv.php?' . http_build_query([
                     <div class="card border-0 shadow-sm h-100 border-start border-success border-4">
                         <div class="card-body">
                             <label class="form-label fw-bold text-success mb-2" for="filter-odalan">Ganti Periode Piodalan:</label>
-                            <form method="GET">
+                            <form method="GET" class="d-flex flex-column gap-2">
                                 <input type="hidden" name="menu" value="rekap_punia_filter">
                                 <select id="filter-odalan" name="id_piodalan" class="form-select shadow-none border-success" onchange="this.form.submit()">
                                     <?php foreach ($odalan_list as $id_o => $nama_o) : ?>
@@ -143,6 +197,16 @@ $url_csv = 'aksi/export_csv.php?' . http_build_query([
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small text-muted mb-1">Dari</label>
+                                        <input type="date" name="dari" class="form-control form-control-sm" value="<?= $esc($f_dari) ?>" onchange="this.form.submit()">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small text-muted mb-1">Sampai</label>
+                                        <input type="date" name="sampai" class="form-control form-control-sm" value="<?= $esc($f_sampai) ?>" onchange="this.form.submit()">
+                                    </div>
+                                </div>
                             </form>
                         </div>
                     </div>

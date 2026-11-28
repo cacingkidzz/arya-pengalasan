@@ -15,7 +15,9 @@ require_once __DIR__ . '/../koneksi.php';
 // dipakai bersama, paging/pencarian dijalankan di SQL, semua output
 // di-escape, dan total mengikuti filter yang aktif.
 // Parameter: id_piodalan, q (donatur/alamat/keterangan), metode,
+//            dari & sampai (rentang tanggal_punia, format Y-m-d),
 //            per (0=semua, 25, 50, 100, 250), hal.
+// 2026-11-28: ditambah filter rentang tanggal (dari/sampai).
 // =====================================================================
 $esc = static function ($v) {
     return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
@@ -51,6 +53,28 @@ $f_metode = (isset($_GET['metode']) && is_scalar($_GET['metode'])) ? (string) $_
 if (!in_array($f_metode, ['tunai', 'transfer', 'QRIS'], true)) {
     $f_metode = '';
 }
+
+// 3b. Rentang tanggal (2026-11-28). Hanya format Y-m-d yang sah yang dipakai;
+// nilai salah / array diabaikan, dan bila terbalik otomatis ditukar.
+$tanggal_sah = static function (string $t): bool {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $t)) {
+        return false;
+    }
+    [$th, $bl, $tg] = array_map('intval', explode('-', $t));
+    return checkdate($bl, $tg, $th);
+};
+$f_dari   = (isset($_GET['dari']) && is_scalar($_GET['dari'])) ? trim((string) $_GET['dari']) : '';
+$f_sampai = (isset($_GET['sampai']) && is_scalar($_GET['sampai'])) ? trim((string) $_GET['sampai']) : '';
+if ($f_dari !== '' && !$tanggal_sah($f_dari)) {
+    $f_dari = '';
+}
+if ($f_sampai !== '' && !$tanggal_sah($f_sampai)) {
+    $f_sampai = '';
+}
+if ($f_dari !== '' && $f_sampai !== '' && $f_dari > $f_sampai) {
+    [$f_dari, $f_sampai] = [$f_sampai, $f_dari];
+}
+
 $per = (isset($_GET['per']) && is_scalar($_GET['per'])) ? (int) $_GET['per'] : 50;
 if (!in_array($per, [0, 25, 50, 100, 250], true)) {
     $per = 50;
@@ -74,6 +98,16 @@ if ($f_metode !== '') {
     $where[]  = 'd.metode_pembayaran = ?';
     $tipe    .= 's';
     $nilai[]  = $f_metode;
+}
+if ($f_dari !== '') {
+    $where[]  = 'd.tanggal_punia >= ?';
+    $tipe    .= 's';
+    $nilai[]  = $f_dari;
+}
+if ($f_sampai !== '') {
+    $where[]  = 'd.tanggal_punia <= ?';
+    $tipe    .= 's';
+    $nilai[]  = $f_sampai;
 }
 $where_sql = ' WHERE ' . implode(' AND ', $where);
 
@@ -142,6 +176,12 @@ if ($f_q !== '') {
 if ($f_metode !== '') {
     $param_dasar['metode'] = $f_metode;
 }
+if ($f_dari !== '') {
+    $param_dasar['dari'] = $f_dari;
+}
+if ($f_sampai !== '') {
+    $param_dasar['sampai'] = $f_sampai;
+}
 if ($per !== 50) {
     $param_dasar['per'] = $per;
 }
@@ -157,9 +197,15 @@ if ($f_q !== '') {
 if ($f_metode !== '') {
     $param_csv['metode'] = $f_metode;
 }
+if ($f_dari !== '') {
+    $param_csv['dari'] = $f_dari;
+}
+if ($f_sampai !== '') {
+    $param_csv['sampai'] = $f_sampai;
+}
 $url_csv = 'aksi/export_csv.php?' . http_build_query($param_csv);
 
-$ada_filter = ($f_q !== '' || $f_metode !== '');
+$ada_filter = ($f_q !== '' || $f_metode !== '' || $f_dari !== '' || $f_sampai !== '');
 $dari   = $jumlah_filter > 0 ? $offset + 1 : 0;
 $sampai = $per > 0 ? min($offset + $per, $jumlah_filter) : $jumlah_filter;
 ?>
@@ -218,15 +264,23 @@ $sampai = $per > 0 ? min($offset + $per, $jumlah_filter) : $jumlah_filter;
                                 <option value="QRIS" <?= $f_metode === 'QRIS' ? 'selected' : '' ?>>QRIS</option>
                             </select>
                         </div>
-                        <div class="col-6 col-lg-2">
-                            <label class="form-label small text-muted mb-1" for="filter-per">Baris/halaman</label>
-                            <select id="filter-per" name="per" class="form-select">
-                                <?php foreach ([25 => '25 baris', 50 => '50 baris', 100 => '100 baris', 250 => '250 baris', 0 => 'Semua'] as $nilai_per => $label_per) : ?>
+                        <div class="col-6 col-lg-1">
+                            <label class="form-label small text-muted mb-1" for="filter-dari">Dari</label>
+                            <input type="date" id="filter-dari" name="dari" class="form-control form-control-sm" value="<?= $esc($f_dari) ?>">
+                        </div>
+                        <div class="col-6 col-lg-1">
+                            <label class="form-label small text-muted mb-1" for="filter-sampai">Sampai</label>
+                            <input type="date" id="filter-sampai" name="sampai" class="form-control form-control-sm" value="<?= $esc($f_sampai) ?>">
+                        </div>
+                        <div class="col-6 col-lg-1">
+                            <label class="form-label small text-muted mb-1" for="filter-per">Baris</label>
+                            <select id="filter-per" name="per" class="form-select form-select-sm">
+                                <?php foreach ([25 => '25', 50 => '50', 100 => '100', 250 => '250', 0 => 'Semua'] as $nilai_per => $label_per) : ?>
                                     <option value="<?= (int) $nilai_per ?>" <?= $per === (int) $nilai_per ? 'selected' : '' ?>><?= $esc($label_per) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-12 col-lg-2 d-flex gap-2">
+                        <div class="col-12 col-lg-1 d-flex gap-2">
                             <button type="submit" class="btn btn-primary flex-fill" title="Terapkan filter">
                                 <i class="fas fa-search"></i> Cari
                             </button>
